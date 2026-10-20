@@ -1,7 +1,7 @@
 """Dòng lệnh:
   snap2book <file hoặc thư mục> [-o thư_mục_ra] [-j số_tiến_trình] [--no-cache] [--scan-only]
-            [--no-dewarp] [--no-spellfix] [--debug] [--force]
-  snap2book typeset <file .md> [-o file.pdf]     dàn trang lại từ Markdown đã sửa
+            [--no-dewarp] [--no-spellfix] [--debug] [--force] [--to-books]
+  snap2book typeset <file .md> [-o file.pdf] [--to-books]     dàn trang lại từ Markdown đã sửa
 
 Mỗi file PDF đầu vào (vd. PDF từ app scan của iPhone) là một cuốn sách; các ảnh rời
 .jpg/.png trong cùng thư mục (sắp theo tên) gộp thành một cuốn.
@@ -17,6 +17,9 @@ Kết quả làm sạch + OCR từng trang được cache trong <thư mục ra>/
 Sau khi soát/sửa lỗi OCR trong <tên>.md, chạy "snap2book typeset <tên>.md" để dàn lại
 <tên>.pdf (mặc định ghi cạnh file .md). Chạy lại snap2book sẽ không ghi đè <tên>.md đã
 sửa: bản OCR mới ghi ra <tên>.ocr.md và <tên>.pdf dàn từ bản đã sửa (--force để ghi đè).
+
+--to-books thêm <tên>.pdf vào app Sách (Apple Books), Sách tự đồng bộ sang iPhone qua iCloud.
+Chỉ thêm khi nội dung PDF đổi so với lần thêm trước, để không sinh bản trùng.
 """
 
 import argparse
@@ -64,9 +67,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="ghi đè cả <tên>.md đã sửa tay (mặc định giữ lại, bản OCR mới ghi ra <tên>.ocr.md)",
     )
+    _add_to_books(ap)
     ap.add_argument("-q", "--quiet", action="store_true", help="chỉ in lỗi")
     ap.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     return ap.parse_args(argv)
+
+
+def _add_to_books(ap: argparse.ArgumentParser) -> None:
+    ap.add_argument(
+        "--to-books",
+        action="store_true",
+        help="thêm PDF vào app Sách (đồng bộ sang iPhone qua iCloud); chỉ thêm khi nội dung đổi",
+    )
 
 
 def _positive_int(text: str) -> int:
@@ -82,6 +94,7 @@ def parse_typeset_args(argv: list[str]) -> argparse.Namespace:
     )
     ap.add_argument("markdown", type=Path, help="file .md (dạng snap2book xuất ra)")
     ap.add_argument("-o", "--output", type=Path, help="file PDF ra (mặc định: cạnh file .md, đuôi .pdf)")
+    _add_to_books(ap)
     ap.add_argument("-q", "--quiet", action="store_true", help="chỉ in lỗi")
     return ap.parse_args(argv)
 
@@ -101,6 +114,10 @@ def typeset(args: argparse.Namespace) -> None:
     out = args.output or args.markdown.with_suffix(".pdf")
     n = to_pdf(book, title or args.markdown.stem, out)
     logging.info("=> %s (%d trang)", out, n)
+    if args.to_books:
+        from snap2book.books import send_to_books
+
+        send_to_books(out)
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -140,6 +157,10 @@ def main(argv: list[str] | None = None) -> None:
             cache_dir=None if args.no_cache else args.out_dir / ".cache" / name,
             force=args.force,
         )
+        if args.to_books:
+            from snap2book.books import send_to_books
+
+            send_to_books(outputs.text_pdf or outputs.scan_pdf)
 
 
 if __name__ == "__main__":
