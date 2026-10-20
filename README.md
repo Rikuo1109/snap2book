@@ -29,11 +29,15 @@ make debug                             # lưu thêm ảnh đánh dấu vùng c�
 Hoặc gọi trực tiếp sau khi cài (`make setup` hoặc `pip install -e .`):
 
 ```bash
-snap2book resources/ -o output [--scan-only] [--debug] [-q]
+snap2book resources/ -o output [--scan-only] [--debug] [--keep-duplicates] [-q]
 ```
 
 Mỗi file PDF đầu vào là một cuốn; các ảnh rời `.jpg/.png/...` trong cùng thư mục, sắp theo tên,
 gộp thành một cuốn.
+
+Sau OCR, script đọc số trang in ở header/footer để cảnh báo trang bị thiếu, trang chụp 2 lần
+hoặc ảnh sai thứ tự. Trang chụp 2 lần liền nhau chỉ giữ ảnh đọc được nhiều dòng hơn
+(`--keep-duplicates` để giữ cả).
 
 **Mẹo chụp:** đưa trang cần chụp vào giữa khung hình. Khi ảnh có hai trang, script chọn trang
 nằm gần giữa nhất.
@@ -53,7 +57,8 @@ sources ─► cleanup ─► scan_pdf                      (<tên> - scan.pdf)
 | `cleanup.py` | Làm phẳng ánh sáng, xoay thẳng, tìm trang chính, bỏ trang bên cạnh / ngón tay / khăn bàn, cắt sát vùng chữ |
 | `scan_pdf.py` | Ghép ảnh đã làm sạch thành PDF ảnh cùng khổ |
 | `ocr.py` | OCR tiếng Việt bằng Apple Vision, xử lý chữ hoa lớn đầu chương (drop cap) |
-| `structure.py` | Bỏ header/footer, nhận tiêu đề chương, tách chú thích, nối đoạn qua các trang |
+| `structure.py` | Bỏ header/footer (giữ lại số trang in), nhận tiêu đề chương, tách chú thích, nối đoạn qua các trang |
+| `pagecheck.py` | Soát số trang in: trang thiếu, chụp lặp, sai thứ tự (có tính đến OCR đọc nhầm số) |
 | `markdown.py` | Xuất Markdown (chú thích dạng `[^1]`) |
 | `typeset.py` | Dàn trang PDF: chú thích ở chân trang có số mũ, chống dòng mồ côi |
 | `pipeline.py`, `cli.py` | Điều phối các bước, dòng lệnh |

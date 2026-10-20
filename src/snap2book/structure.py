@@ -34,6 +34,7 @@ class Block:
 class Book:
     blocks: list[Block] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)  # chú thích thứ n ở notes[n - 1]
+    page_numbers: list[int | None] = field(default_factory=list)  # số trang in, theo trang vào
 
 
 NOTE_REF = re.compile(r"\[\[(\d+)\]\]")  # dấu tham chiếu chú thích trong Block.text
@@ -68,6 +69,23 @@ def _is_running_line(line: TextLine, index: int) -> bool:
     return at_bottom and _is_upper(text)
 
 
+_EDGE_NUMBER = re.compile(r"^\W*(\d{1,4})\b|\b(\d{1,4})\W*$")
+
+
+def page_number(lines: Sequence[TextLine]) -> int | None:
+    """Số trang in trên trang (lấy từ header/footer), None nếu không đọc được.
+    Ưu tiên dòng chỉ có số; sau đó số ở đầu/cuối dòng header/footer ("SAKAGUCHI ANGO 7",
+    "10 VỤ ÁN SÁT NHÂN...")."""
+    running = [line.text.strip() for i, line in enumerate(lines) if _is_running_line(line, i)]
+    for text in running:
+        if re.fullmatch(r"\d{1,4}", digits := text.replace(" ", "")):
+            return int(digits)
+    for text in running:
+        if m := _EDGE_NUMBER.search(text):
+            return int(m.group(1) or m.group(2))
+    return None
+
+
 def _is_noise(text: str) -> bool:
     """Dòng rác (mẩu logo, vết bẩn): gần như không có chữ."""
     return sum(c.isalpha() for c in text) < 2 and not re.fullmatch(r"[\W\d]*[.!?…\"”]", text)
@@ -91,6 +109,7 @@ class _Builder:
             self.para += " " + text
 
     def add_page(self, lines: Sequence[TextLine]) -> None:
+        self.book.page_numbers.append(page_number(lines))
         body = [
             line
             for i, line in enumerate(lines)

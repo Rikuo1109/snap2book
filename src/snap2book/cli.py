@@ -30,6 +30,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     ap.add_argument("--scan-only", action="store_true", help="không OCR, chỉ xuất PDF ảnh đã làm sạch")
     ap.add_argument("--debug", action="store_true", help="lưu ảnh đánh dấu vùng cắt vào <thư mục ra>/debug")
+    ap.add_argument(
+        "--keep-duplicates",
+        action="store_true",
+        help="giữ cả các ảnh chụp lặp một trang (mặc định bỏ bớt, theo số trang in)",
+    )
     ap.add_argument("-q", "--quiet", action="store_true", help="chỉ in lỗi")
     ap.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     return ap.parse_args(argv)
@@ -53,7 +58,7 @@ def main(argv: list[str] | None = None) -> None:
         if args.scan_only:
             outputs.text_pdf = outputs.markdown = None
         debug_dir = args.out_dir / "debug" / name if args.debug else None
-        convert(inputs, outputs, debug_dir)
+        convert(inputs, outputs, debug_dir, drop_duplicates=not args.keep_duplicates)
 
 
 if __name__ == "__main__":
