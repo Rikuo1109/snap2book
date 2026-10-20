@@ -8,7 +8,9 @@ Dạng Markdown:
   [^n]: nội dung chú thích (cuối file)
 """
 
+import hashlib
 import re
+from pathlib import Path
 
 from snap2book.structure import NOTE_REF, Block, Book, note_ref
 
@@ -83,3 +85,42 @@ def from_markdown(text: str) -> tuple[Book, str | None]:
         order.setdefault(label, len(order) + 1)
     notes = [defs[label] for label in sorted(order, key=order.get)]
     return Book(blocks, notes), title
+
+
+def fingerprint_path(md: Path) -> Path:
+    """File ẩn cạnh file .md, ghi mã băm của nội dung snap2book đã xuất ra."""
+    return md.with_name(f".{md.name}.sha256")
+
+
+def ocr_path(md: Path) -> Path:
+    """Nơi ghi bản OCR mới khi file .md đã được sửa tay: <tên>.ocr.md."""
+    return md.with_suffix(".ocr.md")
+
+
+def _sha256(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def is_hand_edited(md: Path) -> bool:
+    """File .md đã có và khác bản snap2book ghi lần trước (hoặc không có mã băm để so,
+    vd. file xuất từ bản cũ) thì coi là đã sửa tay."""
+    if not md.exists():
+        return False
+    try:
+        recorded = fingerprint_path(md).read_text(encoding="utf-8").strip()
+    except FileNotFoundError:
+        return True
+    return recorded != _sha256(md.read_bytes())
+
+
+def save_markdown(md: Path, text: str, force: bool = False) -> Path:
+    """Ghi Markdown vừa xuất kèm mã băm. Nếu file .md đã được sửa tay (và không force) thì
+    giữ nguyên nó, ghi bản mới ra <tên>.ocr.md. Trả về đường dẫn đã ghi."""
+    if not force and is_hand_edited(md):
+        out = ocr_path(md)
+        out.write_text(text, encoding="utf-8")
+        return out
+    data = text.encode("utf-8")
+    md.write_bytes(data)
+    fingerprint_path(md).write_text(_sha256(data) + "\n", encoding="utf-8")
+    return md
