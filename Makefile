@@ -5,6 +5,8 @@
 #   make debug                       lưu thêm ảnh đánh dấu vùng cắt vào output/debug/
 #   make typeset MD=output/sach.md   dàn lại PDF từ file .md đã sửa (ghi đè output/sach.pdf)
 #   make FORCE=1                     ghi đè cả file .md đã sửa tay (mặc định giữ, bản mới ra .ocr.md)
+#   make books                       như make, rồi thêm PDF vào app Sách (đồng bộ sang iPhone)
+#                                    BOOKS=1 làm điều tương tự cho mọi lệnh, vd. make typeset MD=... BOOKS=1
 #   make test | lint | format        kiểm thử, kiểm tra / định dạng code
 #   make clean                       xoá output/ (cả cache output/.cache/)   make distclean   xoá cả .venv/
 
@@ -14,9 +16,10 @@ OUT ?= output
 PYTHON ?= $(firstword $(wildcard $(HOME)/.pyenv/versions/3.12*/bin/python) python3)
 VENV := .venv
 BIN := $(VENV)/bin
-CLI := $(BIN)/snap2book -o "$(OUT)" $(if $(FORCE),--force)
+TO_BOOKS := $(if $(BOOKS),--to-books)
+CLI := $(BIN)/snap2book -o "$(OUT)" $(if $(FORCE),--force) $(TO_BOOKS)
 
-.PHONY: all run scan debug typeset setup test lint format clean distclean
+.PHONY: all run books scan debug typeset setup test lint format clean distclean
 
 all: run
 
@@ -31,6 +34,9 @@ setup: $(VENV)/.installed
 run: setup
 	$(CLI) "$(IN)"
 
+books: setup
+	$(CLI) "$(IN)" --to-books
+
 scan: setup
 	$(CLI) "$(IN)" --scan-only
 
@@ -39,7 +45,7 @@ debug: setup
 
 typeset: setup
 	@test -n "$(MD)" || { echo 'Cần chỉ file: make typeset MD=output/<tên>.md'; exit 1; }
-	$(BIN)/snap2book typeset "$(MD)"
+	$(BIN)/snap2book typeset "$(MD)" $(TO_BOOKS)
 
 test: setup
 	$(BIN)/pytest -q
