@@ -1,6 +1,9 @@
 .venv/
 output/
 __pycache__/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
 .DS_Store
 # ảnh chụp sách (file lớn, có bản quyền) - không commit
 resources/*

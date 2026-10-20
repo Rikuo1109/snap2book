@@ -1,39 +1,53 @@
 # Chuyển ảnh chụp sách thành PDF.
-#   make            cài môi trường (lần đầu) rồi xử lý mọi file trong resources/
-#   make run IN=resources/sach.pdf   xử lý một file / thư mục cụ thể
-#   make scan       chỉ xuất bản ảnh đã làm sạch, không OCR
-#   make debug      lưu thêm ảnh đánh dấu vùng cắt vào output/debug/
-#   make clean      xoá output/        make distclean   xoá cả .venv/
+#   make                             cài môi trường (lần đầu) rồi xử lý mọi file trong resources/
+#   make run IN=resources/sach.pdf   xử lý một file / thư mục cụ thể (OUT=thư mục ra)
+#   make scan                        chỉ xuất bản ảnh đã làm sạch, không OCR
+#   make debug                       lưu thêm ảnh đánh dấu vùng cắt vào output/debug/
+#   make test | lint | format        kiểm thử, kiểm tra / định dạng code
+#   make clean                       xoá output/        make distclean   xoá cả .venv/
 
 IN ?= resources
+OUT ?= output
 # OCR (pyobjc) cần Python >= 3.10; mặc định lấy bản 3.12 của pyenv nếu có
 PYTHON ?= $(firstword $(wildcard $(HOME)/.pyenv/versions/3.12*/bin/python) python3)
 VENV := .venv
-PY := $(VENV)/bin/python -W ignore
+BIN := $(VENV)/bin
+CLI := $(BIN)/book-scanner -o "$(OUT)"
 
-.PHONY: all run scan debug setup clean distclean
+.PHONY: all run scan debug setup test lint format clean distclean
 
 all: run
 
-$(VENV)/.installed: requirements.txt
+$(VENV)/.installed: pyproject.toml
 	$(PYTHON) -m venv $(VENV)
-	$(VENV)/bin/pip install -q --upgrade pip
-	$(VENV)/bin/pip install -q -r requirements.txt
+	$(BIN)/pip install -q --upgrade pip
+	$(BIN)/pip install -q -e ".[dev]"
 	touch $@
 
 setup: $(VENV)/.installed
 
 run: setup
-	$(PY) scan2pdf.py "$(IN)"
+	$(CLI) "$(IN)"
 
 scan: setup
-	$(PY) scan2pdf.py "$(IN)" --scan-only
+	$(CLI) "$(IN)" --scan-only
 
 debug: setup
-	$(PY) scan2pdf.py "$(IN)" --debug
+	$(CLI) "$(IN)" --debug
+
+test: setup
+	$(BIN)/pytest -q
+
+lint: setup
+	$(BIN)/ruff check src tests
+	$(BIN)/ruff format --check src tests
+
+format: setup
+	$(BIN)/ruff check --fix src tests
+	$(BIN)/ruff format src tests
 
 clean:
-	rm -rf output
+	rm -rf "$(OUT)"
 
 distclean: clean
-	rm -rf $(VENV)
+	rm -rf $(VENV) src/*.egg-info .pytest_cache .ruff_cache

@@ -1,4 +1,0 @@
-pymupdf
-opencv-python-headless
-numpy
-pyobjc-framework-Vision  # OCR, chỉ trên macOS

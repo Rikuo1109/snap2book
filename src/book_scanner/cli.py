@@ -1,0 +1,60 @@
+"""Dòng lệnh: book-scanner <file hoặc thư mục> [-o thư_mục_ra] [--scan-only] [--debug]
+
+Mỗi file PDF đầu vào (vd. PDF từ app scan của iPhone) là một cuốn sách; các ảnh rời
+.jpg/.png trong cùng thư mục (sắp theo tên) gộp thành một cuốn.
+
+Đầu ra cho mỗi cuốn, trong thư mục ra (mặc định output/):
+  <tên>.pdf         sách dàn trang lại từ chữ OCR (gọn, tìm kiếm/copy được)
+  <tên>.md          nội dung dạng text, để soát/sửa lỗi OCR
+  <tên> - scan.pdf  ảnh các trang đã làm sạch (để đối chiếu)
+"""
+
+import argparse
+import logging
+import sys
+import warnings
+from pathlib import Path
+
+from book_scanner import __version__
+from book_scanner.pipeline import convert, output_paths
+from book_scanner.sources import find_jobs
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    ap = argparse.ArgumentParser(
+        prog="book-scanner", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    ap.add_argument("input", type=Path, help="file PDF / ảnh, hoặc thư mục")
+    ap.add_argument(
+        "-o", "--out-dir", type=Path, default=Path("output"), help="thư mục ra (mặc định: output)"
+    )
+    ap.add_argument("--scan-only", action="store_true", help="không OCR, chỉ xuất PDF ảnh đã làm sạch")
+    ap.add_argument("--debug", action="store_true", help="lưu ảnh đánh dấu vùng cắt vào <thư mục ra>/debug")
+    ap.add_argument("-q", "--quiet", action="store_true", help="chỉ in lỗi")
+    ap.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
+    return ap.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> None:
+    args = parse_args(argv)
+    logging.basicConfig(level=logging.WARNING if args.quiet else logging.INFO, format="%(message)s")
+    warnings.filterwarnings("ignore", category=FutureWarning, module="pymupdf")
+
+    try:
+        jobs = find_jobs(args.input)
+    except FileNotFoundError:
+        sys.exit(f"Không tìm thấy: {args.input}")
+    if not jobs:
+        sys.exit(f"Không có file PDF hay ảnh nào trong: {args.input}")
+
+    for name, inputs in jobs:
+        logging.info("%s:", name)
+        outputs = output_paths(args.out_dir, name)
+        if args.scan_only:
+            outputs.text_pdf = outputs.markdown = None
+        debug_dir = args.out_dir / "debug" / name if args.debug else None
+        convert(inputs, outputs, debug_dir)
+
+
+if __name__ == "__main__":
+    main()
