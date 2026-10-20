@@ -30,7 +30,7 @@ make typeset MD=output/sach.md         # dàn lại sach.pdf từ file .md đã 
 Hoặc gọi trực tiếp sau khi cài (`make setup` hoặc `pip install -e .`):
 
 ```bash
-snap2book resources/ -o output [--scan-only] [--debug] [--keep-duplicates] [-q]
+snap2book resources/ -o output [--scan-only] [--no-dewarp] [--debug] [--keep-duplicates] [-q]
 snap2book typeset output/sach.md [-o sach.pdf] [-q]
 ```
 
@@ -67,8 +67,9 @@ sources ─► cleanup ─► scan_pdf                      (<tên> - scan.pdf)
 |---|---|
 | `sources.py` | Đọc ảnh từ PDF/ảnh rời, gom đầu vào thành từng cuốn |
 | `cleanup.py` | Làm phẳng ánh sáng, xoay thẳng, tìm trang chính, bỏ trang bên cạnh / ngón tay / khăn bàn, cắt sát vùng chữ |
+| `dewarp.py` | Làm phẳng trang cong gần gáy sách: ước lượng độ võng từ các dòng chữ rồi kéo thẳng |
 | `scan_pdf.py` | Ghép ảnh đã làm sạch thành PDF ảnh cùng khổ |
-| `ocr.py` | OCR tiếng Việt bằng Apple Vision, xử lý chữ hoa lớn đầu chương (drop cap) |
+| `ocr.py` | OCR tiếng Việt bằng Apple Vision, xử lý chữ hoa lớn đầu chương (drop cap), gộp mảnh dòng bị tách |
 | `structure.py` | Bỏ header/footer (giữ lại số trang in), nhận tiêu đề chương, tách chú thích, nối đoạn qua các trang |
 | `pagecheck.py` | Soát số trang in: trang thiếu, chụp lặp, sai thứ tự (có tính đến OCR đọc nhầm số) |
 | `markdown.py` | Xuất Markdown (chú thích dạng `[^1]`) và đọc ngược lại để dàn trang bản đã sửa |
@@ -85,8 +86,8 @@ make format     # ruff tự sửa và định dạng
 
 ## Hạn chế
 
-- Trang chụp cong nhiều (gần gáy sách) chỉ được xoay thẳng, chưa làm phẳng, nên OCR ở vùng đó
-  dễ sai dấu. Nên đọc soát file `.md` rồi dàn lại bằng `snap2book typeset`.
+- Trang cong được kéo thẳng theo chiều dọc, nhưng chữ bị co ngang gần gáy sách thì chưa sửa;
+  OCR vẫn còn sai dấu lẻ tẻ, nên đọc soát file `.md` rồi dàn lại bằng `snap2book typeset`.
 - Số mũ chú thích đôi khi bị OCR đọc thành dấu nháy; script nhận dạng được trường hợp này,
   các dạng lỗi khác thì chưa. Tương tự, nháy đơn đầu đoạn ngay trước chữ hoa (`'Đương...`) được
   sửa thành ngoặc kép.

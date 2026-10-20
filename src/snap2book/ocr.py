@@ -1,11 +1,10 @@
 """OCR tiếng Việt bằng Apple Vision (chỉ chạy trên macOS)."""
 
 from dataclasses import dataclass
+from itertools import pairwise
 
 import cv2
-import Foundation
 import numpy as np
-import Vision
 
 LANGUAGE = "vi-VT"  # mã tiếng Việt của Vision (không phải vi-VN)
 
@@ -23,6 +22,9 @@ class Line:
 
 def recognize(img: np.ndarray) -> list[Line]:
     """OCR một ảnh, trả về các dòng theo thứ tự Vision."""
+    import Foundation  # pyobjc, chỉ có trên macOS; import muộn để phần còn lại dùng được ở mọi nơi
+    import Vision
+
     _, buf = cv2.imencode(".png", img)
     data = Foundation.NSData.dataWithBytes_length_(buf.tobytes(), len(buf))
     req = Vision.VNRecognizeTextRequest.alloc().init()
@@ -83,5 +85,48 @@ def ocr_page(img: np.ndarray) -> list[Line]:
         for line in lines:
             if line.y0 * h < y + bh and line.y1 * h > y and line.x0 * w < x + bw * 2:
                 line.x0 = 0.0
-    lines.sort(key=lambda line: (line.y0, line.x0))
-    return lines
+    return merge_rows(lines)
+
+
+def _overlap(left: str, right: str, limit: int = 4) -> int:
+    """Độ dài dài nhất (tối đa limit ký tự) mà cuối left trùng đầu right."""
+    for n in range(min(limit, len(left), len(right)), 0, -1):
+        if left.endswith(right[:n]):
+            return n
+    return 0
+
+
+def merge_rows(lines: list[Line]) -> list[Line]:
+    """Gộp các mảnh cùng một dòng (Vision đôi khi tách một dòng thành vài mảnh, lệch nhau
+    vài px theo chiều dọc) thành một dòng, ghép chữ trái sang phải; sắp các dòng từ trên xuống.
+    Hai mảnh cùng dòng khi chồng nhau theo chiều dọc hơn nửa chiều cao mảnh thấp hơn."""
+    rows: list[list[Line]] = []
+    for line in sorted(lines, key=lambda line: (line.y0 + line.y1) / 2):
+        for row in rows:
+            top, bottom = min(r.y0 for r in row), max(r.y1 for r in row)
+            overlap = min(bottom, line.y1) - max(top, line.y0)
+            if overlap > 0.5 * min(line.y1 - line.y0, bottom - top):
+                row.append(line)
+                break
+        else:
+            rows.append([line])
+    merged = []
+    for row in rows:
+        row.sort(key=lambda line: line.x0)
+        text = row[0].text.strip()
+        for prev, line in pairwise(row):
+            part = line.text.strip()
+            if line.x0 < prev.x1:  # hai mảnh chồng nhau: phần chồng có thể bị đọc hai lần
+                part = part[_overlap(text, part) :].lstrip()
+            text = f"{text} {part}" if part else text
+        merged.append(
+            Line(
+                text,
+                row[0].x0,
+                min(line.y0 for line in row),
+                max(line.x1 for line in row),
+                max(line.y1 for line in row),
+            )
+        )
+    merged.sort(key=lambda line: (line.y0, line.x0))
+    return merged
