@@ -85,3 +85,16 @@ def test_footnote_extracted_and_marked(page):
     md = to_markdown(book, "Sách")
     assert "Sotori[^1], công chúa" in md
     assert md.rstrip().endswith("[^1]: Một nhân vật trong truyền thuyết.")
+
+
+def test_ocr_single_quote_opening_dialogue_fixed(page):
+    book = build_book(
+        [
+            page(
+                ("'Đương nhiên là có rồi.\" Kazuma", "indent"),
+                ("nói.", "last"),
+                ("'tôi' là người kể.", "indent"),
+            )
+        ]
+    )
+    assert texts(book) == ['"Đương nhiên là có rồi." Kazuma nói.', "'tôi' là người kể."]
