@@ -1,0 +1,7 @@
+.venv/
+output/
+__pycache__/
+.DS_Store
+# ảnh chụp sách (file lớn, có bản quyền) - không commit
+resources/*
+!resources/.gitkeep
