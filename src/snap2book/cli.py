@@ -157,11 +157,14 @@ def main(argv: list[str] | None = None) -> None:
         return
 
     try:
-        jobs = find_jobs(args.input)
+        from snap2book.icloud import DEFAULT_DIR
+
+        # thư mục kết quả có thể nằm trong thư mục đầu vào (vd. iCloud Drive/snap2book): không coi là sách
+        jobs = find_jobs(args.input, exclude=[args.out_dir, DEFAULT_DIR, *filter(None, [args.to_icloud])])
     except FileNotFoundError:
         sys.exit(f"Không tìm thấy: {args.input}")
     if not jobs:
-        sys.exit(f"Không có file PDF hay ảnh nào trong: {args.input}")
+        sys.exit(f"Không có file PDF hay ảnh nào trong: {args.input} (quét sách vào thư mục này trước)")
 
     for name, inputs in jobs:
         logging.info("%s:", name)

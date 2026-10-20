@@ -26,7 +26,7 @@ make scan                              # chỉ xuất bản ảnh đã làm sạ
 make debug                             # lưu thêm ảnh đánh dấu vùng cắt vào output/debug/
 make typeset MD=output/sach.md         # dàn lại sach.pdf từ file .md đã sửa
 make FORCE=1                           # ghi đè cả file .md đã sửa tay
-make icloud                            # như make, rồi chép PDF vào iCloud Drive để mở trên iPhone
+make icloud                            # xử lý bản quét trong iCloud Drive/snap2book/Bản quét → Sách đã xử lý
 make books                             # như make, rồi thêm PDF vào app Sách trên Mac
 ```
 
@@ -38,7 +38,7 @@ snap2book typeset output/sach.md [-o sach.pdf] [--to-books] [--to-icloud [THƯ_M
 ```
 
 Mỗi file PDF đầu vào là một cuốn; các ảnh rời `.jpg/.png/...` trong cùng thư mục, sắp theo tên,
-gộp thành một cuốn.
+gộp thành một cuốn; mỗi thư mục con cũng là một cuốn (gộp mọi PDF/ảnh trong đó theo tên).
 
 Sau OCR, script đọc số trang in ở header/footer để cảnh báo trang bị thiếu, trang chụp 2 lần
 hoặc ảnh sai thứ tự. Trang chụp 2 lần liền nhau chỉ giữ ảnh đọc được nhiều dòng hơn
@@ -86,21 +86,30 @@ mã băm (xuất từ bản cũ) cũng được giữ lại cho chắc. Muốn g
 
 ### Đọc trên iPhone
 
-**Cách chắc chắn: iCloud Drive.** `--to-icloud` (hoặc `make icloud`, hay thêm `ICLOUD=1` vào lệnh
-make bất kỳ, vd. `make typeset MD=output/sach.md ICLOUD=1`) chép `<tên>.pdf` vào
-`iCloud Drive/snap2book/Sách đã xử lý/` (đổi bằng `--to-icloud <thư mục>`). Trên iPhone: app **Tệp**
-→ iCloud Drive → snap2book → Sách đã xử lý; muốn cho vào app Sách thì bấm Chia sẻ → **Sách** ngay
-trên iPhone. Chép đè theo tên file nên chạy lại không sinh bản trùng.
+**Cách chắc chắn: iCloud Drive.** Trên iCloud Drive dùng thư mục `snap2book`:
 
-Kết hợp với quét sách từ iPhone: trong app Tệp, vào thư mục `snap2book` trên iCloud Drive, bấm
-"…" → **Quét tài liệu**. Trên Mac, trỏ một link vào thư mục đó rồi chạy:
-
-```bash
-ln -s "$HOME/Library/Mobile Documents/com~apple~CloudDocs/snap2book" resources/icloud
-make icloud IN=resources/icloud
+```
+snap2book/
+├── Bản quét/                            ← quét từ iPhone vào đây
+│   ├── Sách A.pdf                       (một lần quét = một cuốn)
+│   └── Vụ án sát nhân không liên hoàn/  (cuốn quét nhiều lần: để chung một thư mục, tự gộp)
+│       ├── 1.pdf
+│       └── 2.pdf
+└── Sách đã xử lý/                       ← kết quả, đọc trên iPhone
 ```
 
-(Thư mục con `Sách đã xử lý` không bị coi là đầu vào: chỉ đọc file nằm trực tiếp trong thư mục.)
+1. iPhone: app **Tệp** → iCloud Drive → snap2book → Bản quét (hoặc thư mục con của cuốn sách) →
+   "…" → **Quét tài liệu**. Đổi tên file thành tên sách (hoặc `1`, `2`, … nếu để trong thư mục sách).
+2. Mac, trong Terminal: `make icloud` (tự tạo `Bản quét` nếu chưa có). Trang đã xử lý lần trước được
+   lấy từ cache, chỉ trang mới phải OCR.
+3. iPhone: app **Tệp** → snap2book → **Sách đã xử lý**; muốn cho vào app Sách thì Chia sẻ → **Sách**.
+
+Mỗi file PDF trong `Bản quét` là một cuốn; mỗi thư mục con là một cuốn, gồm mọi PDF và ảnh trong đó
+theo thứ tự tên ("2" trước "10"). Nếu một file PDF trùng tên với thư mục con thì dùng thư mục con.
+Trang chụp lặp hoặc thiếu được cảnh báo theo số trang in.
+
+Với thư mục khác hoặc lệnh khác, dùng `--to-icloud` / `ICLOUD=1`, vd.
+`make typeset MD=output/sach.md ICLOUD=1`. Chép đè theo tên file nên chạy lại không sinh bản trùng.
 macOS chặn ứng dụng chưa được cấp quyền đọc/ghi iCloud Drive: chạy trong Terminal (lần đầu bấm Cho
 phép), hoặc cấp quyền ở Cài đặt hệ thống → Quyền riêng tư & Bảo mật → Tệp và thư mục.
 

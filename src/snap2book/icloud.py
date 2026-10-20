@@ -13,7 +13,9 @@ from pathlib import Path
 log = logging.getLogger(__name__)
 
 ICLOUD_DRIVE = Path.home() / "Library" / "Mobile Documents" / "com~apple~CloudDocs"
-DEFAULT_DIR = ICLOUD_DRIVE / "snap2book" / "Sách đã xử lý"
+ROOT = ICLOUD_DRIVE / "snap2book"
+SCAN_DIR = ROOT / "Bản quét"  # quét từ iPhone vào đây (make icloud đọc từ đây)
+DEFAULT_DIR = ROOT / "Sách đã xử lý"  # kết quả để đọc trên iPhone
 
 
 def copy_to_icloud(pdf: Path, dest_dir: Path = DEFAULT_DIR) -> Path | None:
