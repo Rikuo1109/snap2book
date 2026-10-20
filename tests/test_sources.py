@@ -47,7 +47,9 @@ def test_loose_pdf_with_same_name_as_folder_is_skipped(tmp_path, caplog):
 def test_outputs_books_prefers_text_outputs(tmp_path):
     from snap2book.pipeline import output_paths
 
-    out = output_paths(tmp_path, "Sách")
-    assert [p.name for p in out.books()] == ["Sách.pdf", "Sách.epub"]
-    out.text_pdf = out.markdown = out.epub = None  # chế độ chỉ-ảnh
+    out = output_paths(tmp_path, "Sách")  # mặc định chỉ EPUB, không PDF chữ
+    assert [p.name for p in out.books()] == ["Sách.epub"]
+    assert [p.name for p in output_paths(tmp_path, "Sách", pdf=True).books()] == ["Sách.epub", "Sách.pdf"]
+    out.markdown = out.epub = None  # chế độ chỉ-ảnh
+    assert not out.wants_text()
     assert [p.name for p in out.books()] == ["Sách - scan.pdf"]

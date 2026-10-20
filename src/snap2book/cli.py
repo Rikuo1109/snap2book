@@ -1,30 +1,30 @@
 """Dòng lệnh:
-  snap2book <file hoặc thư mục> [-o thư_mục_ra] [-j số_tiến_trình] [--no-cache] [--scan-only]
+  snap2book <file hoặc thư mục> [-o thư_mục_ra] [-j số_tiến_trình] [--no-cache] [--scan-only] [--pdf]
             [--no-dewarp] [--no-spellfix] [--debug] [--force] [--to-books] [--to-icloud [thư_mục]]
-  snap2book typeset <file .md> [-o file.pdf] [--to-books] [--to-icloud [thư_mục]]
-                                                    dàn trang lại từ Markdown đã sửa
+  snap2book typeset <file .md> [-o file.epub] [--pdf] [--to-books] [--to-icloud [thư_mục]]
+                                                    dựng lại sách từ Markdown đã sửa
 
 Mỗi file PDF đầu vào (vd. PDF từ app scan của iPhone) là một cuốn sách; các ảnh rời
-.jpg/.png trong cùng thư mục (sắp theo tên) gộp thành một cuốn.
+.jpg/.png trong cùng thư mục (sắp theo tên) gộp thành một cuốn; mỗi thư mục con cũng là một cuốn.
 
 Đầu ra cho mỗi cuốn, trong thư mục ra (mặc định output/):
-  <tên>.pdf         sách dàn trang lại từ chữ OCR (gọn, tìm kiếm/copy được)
   <tên>.epub        sách điện tử: chữ tự dàn theo màn hình, mục lục theo chương
   <tên>.md          nội dung dạng text, để soát/sửa lỗi OCR
-  <tên> - scan.pdf  ảnh các trang đã làm sạch (để đối chiếu)
+  <tên> - scan.pdf  ảnh các trang đã làm sạch (để đối chiếu khi soát lỗi)
+  <tên>.pdf         chỉ khi có --pdf: sách dàn trang lại khổ A5
 
 Kết quả làm sạch + OCR từng trang được cache trong <thư mục ra>/.cache/<tên>/, chạy lại
 (vd. sau khi thêm vài ảnh) chỉ phải xử lý các trang mới / đã đổi.
 
-Sau khi soát/sửa lỗi OCR trong <tên>.md, chạy "snap2book typeset <tên>.md" để dàn lại
-<tên>.pdf (mặc định ghi cạnh file .md). Chạy lại snap2book sẽ không ghi đè <tên>.md đã
-sửa: bản OCR mới ghi ra <tên>.ocr.md và <tên>.pdf/.epub dàn từ bản đã sửa (--force để ghi đè).
+Sau khi soát/sửa lỗi OCR trong <tên>.md, chạy "snap2book typeset <tên>.md" để dựng lại
+<tên>.epub (mặc định ghi cạnh file .md). Chạy lại snap2book sẽ không ghi đè <tên>.md đã
+sửa: bản OCR mới ghi ra <tên>.ocr.md và sách dựng từ bản đã sửa (--force để ghi đè).
 
 --to-books thêm <tên>.epub (không có thì .pdf) vào app Sách (Apple Books) trên Mac; Sách đồng bộ
 sang iPhone nếu đã bật iCloud Drive cho Sách. Chỉ thêm khi nội dung đổi, để không sinh bản trùng.
 
---to-icloud chép <tên>.pdf và <tên>.epub vào iCloud Drive (mặc định snap2book/Sách đã xử lý); trên iPhone mở
-bằng app Tệp, hoặc Chia sẻ → Sách. Không phụ thuộc vào đồng bộ của app Sách.
+--to-icloud chép sách (<tên>.epub, và <tên>.pdf nếu có --pdf) vào iCloud Drive (mặc định
+snap2book/Sách đã xử lý); trên iPhone mở bằng app Tệp, hoặc Chia sẻ → Sách.
 """
 
 import argparse
@@ -58,6 +58,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--no-cache", action="store_true", help="không dùng / không ghi cache, làm sạch và OCR lại mọi trang"
     )
     ap.add_argument("--scan-only", action="store_true", help="không OCR, chỉ xuất PDF ảnh đã làm sạch")
+    _add_pdf(ap)
     ap.add_argument("--no-dewarp", action="store_true", help="không làm phẳng trang cong")
     ap.add_argument("--no-spellfix", action="store_true", help="không sửa lỗi dấu OCR theo từ điển chính tả")
     ap.add_argument("-v", "--verbose", action="store_true", help="in chi tiết (vd. từng từ đã sửa dấu)")
@@ -76,6 +77,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     ap.add_argument("-q", "--quiet", action="store_true", help="chỉ in lỗi")
     ap.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     return ap.parse_args(argv)
+
+
+def _add_pdf(ap: argparse.ArgumentParser) -> None:
+    ap.add_argument("--pdf", action="store_true", help="xuất thêm PDF chữ khổ A5 (mặc định chỉ EPUB)")
 
 
 def _add_to_books(ap: argparse.ArgumentParser) -> None:
@@ -120,10 +125,11 @@ def _positive_int(text: str) -> int:
 
 def parse_typeset_args(argv: list[str]) -> argparse.Namespace:
     ap = argparse.ArgumentParser(
-        prog="snap2book typeset", description="Dàn trang PDF từ file Markdown (đã soát/sửa lỗi OCR)."
+        prog="snap2book typeset", description="Dựng lại sách (EPUB) từ file Markdown đã soát/sửa lỗi OCR."
     )
     ap.add_argument("markdown", type=Path, help="file .md (dạng snap2book xuất ra)")
-    ap.add_argument("-o", "--output", type=Path, help="file PDF ra (mặc định: cạnh file .md, đuôi .pdf)")
+    ap.add_argument("-o", "--output", type=Path, help="file EPUB ra (mặc định: cạnh file .md, đuôi .epub)")
+    _add_pdf(ap)
     _add_to_books(ap)
     ap.add_argument("-q", "--quiet", action="store_true", help="chỉ in lỗi")
     return ap.parse_args(argv)
@@ -132,7 +138,6 @@ def parse_typeset_args(argv: list[str]) -> argparse.Namespace:
 def typeset(args: argparse.Namespace) -> None:
     from snap2book.epub import to_epub
     from snap2book.markdown import from_markdown
-    from snap2book.typeset import to_pdf
 
     try:
         text = args.markdown.read_text(encoding="utf-8")
@@ -142,13 +147,17 @@ def typeset(args: argparse.Namespace) -> None:
         book, title = from_markdown(text)
     except ValueError as e:
         sys.exit(f"{args.markdown}: {e}")
-    out = args.output or args.markdown.with_suffix(".pdf")
+    epub = (args.output or args.markdown).with_suffix(".epub")
     title = title or args.markdown.stem
-    n = to_pdf(book, title, out)
-    logging.info("=> %s (%d trang)", out, n)
-    epub = out.with_suffix(".epub")
     logging.info("=> %s (%d chương)", epub, to_epub(book, title, epub))
-    _deliver([out, epub], args)
+    files = [epub]
+    if args.pdf:
+        from snap2book.typeset import to_pdf
+
+        pdf = epub.with_suffix(".pdf")
+        logging.info("=> %s (%d trang)", pdf, to_pdf(book, title, pdf))
+        files.append(pdf)
+    _deliver(files, args)
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -176,7 +185,7 @@ def main(argv: list[str] | None = None) -> None:
 
     for name, inputs in jobs:
         logging.info("%s:", name)
-        outputs = output_paths(args.out_dir, name)
+        outputs = output_paths(args.out_dir, name, pdf=args.pdf)
         if args.scan_only:
             outputs.text_pdf = outputs.markdown = outputs.epub = None
         debug_dir = args.out_dir / "debug" / name if args.debug else None
