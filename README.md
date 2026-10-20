@@ -30,7 +30,7 @@ make typeset MD=output/sach.md         # dàn lại sach.pdf từ file .md đã 
 Hoặc gọi trực tiếp sau khi cài (`make setup` hoặc `pip install -e .`):
 
 ```bash
-snap2book resources/ -o output [--scan-only] [--no-dewarp] [--debug] [--keep-duplicates] [-q]
+snap2book resources/ -o output [--scan-only] [--no-dewarp] [--no-spellfix] [--debug] [-v] [--keep-duplicates] [-q]
 snap2book typeset output/sach.md [-o sach.pdf] [-q]
 ```
 
@@ -57,10 +57,10 @@ nằm gần giữa nhất.
 ## Cách hoạt động
 
 ```
-sources ─► cleanup ─► scan_pdf                      (<tên> - scan.pdf)
-              │
-              └─► ocr ─► structure ─┬─► markdown    (<tên>.md) ─┐ sửa tay
-                                    └─► typeset     (<tên>.pdf) ◄┘ snap2book typeset
+sources ─► cleanup ─► dewarp ─► scan_pdf                                  (<tên> - scan.pdf)
+                        │
+                        └─► ocr ─► spellfix ─► structure ─┬─► markdown    (<tên>.md) ─┐ sửa tay
+                                                          └─► typeset     (<tên>.pdf) ◄┘ snap2book typeset
 ```
 
 | Module | Việc |
@@ -72,6 +72,7 @@ sources ─► cleanup ─► scan_pdf                      (<tên> - scan.pdf)
 | `ocr.py` | OCR tiếng Việt bằng Apple Vision, xử lý chữ hoa lớn đầu chương (drop cap), gộp mảnh dòng bị tách |
 | `structure.py` | Bỏ header/footer (giữ lại số trang in), nhận tiêu đề chương, tách chú thích, nối đoạn qua các trang |
 | `pagecheck.py` | Soát số trang in: trang thiếu, chụp lặp, sai thứ tự (có tính đến OCR đọc nhầm số) |
+| `spellfix.py` | Sửa lỗi dấu OCR: từ sai chính tả được thay bằng phương án đọc khác hoặc từ cùng chữ cái trong sách (từ điển tiếng Việt của macOS) |
 | `markdown.py` | Xuất Markdown (chú thích dạng `[^1]`) và đọc ngược lại để dàn trang bản đã sửa |
 | `typeset.py` | Dàn trang PDF: chú thích ở chân trang có số mũ, chống dòng mồ côi |
 | `pipeline.py`, `cli.py` | Điều phối các bước, dòng lệnh |
@@ -88,6 +89,8 @@ make format     # ruff tự sửa và định dạng
 
 - Trang cong được kéo thẳng theo chiều dọc, nhưng chữ bị co ngang gần gáy sách thì chưa sửa;
   OCR vẫn còn sai dấu lẻ tẻ, nên đọc soát file `.md` rồi dàn lại bằng `snap2book typeset`.
+- Bước sửa dấu chỉ sửa từ không tồn tại ("dịnh" → "định"); từ có thật nhưng sai ngữ cảnh
+  ("chẳng" đọc thành "chăng") thì không. `-v` in ra từng từ đã sửa.
 - Số mũ chú thích đôi khi bị OCR đọc thành dấu nháy; script nhận dạng được trường hợp này,
   các dạng lỗi khác thì chưa. Tương tự, nháy đơn đầu đoạn ngay trước chữ hoa (`'Đương...`) được
   sửa thành ngoặc kép.

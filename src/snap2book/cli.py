@@ -1,5 +1,5 @@
 """Dòng lệnh:
-  snap2book <file hoặc thư mục> [-o thư_mục_ra] [--scan-only] [--no-dewarp] [--debug]
+  snap2book <file hoặc thư mục> [-o thư_mục_ra] [--scan-only] [--no-dewarp] [--no-spellfix] [--debug]
   snap2book typeset <file .md> [-o file.pdf]     dàn trang lại từ Markdown đã sửa
 
 Mỗi file PDF đầu vào (vd. PDF từ app scan của iPhone) là một cuốn sách; các ảnh rời
@@ -35,6 +35,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     ap.add_argument("--scan-only", action="store_true", help="không OCR, chỉ xuất PDF ảnh đã làm sạch")
     ap.add_argument("--no-dewarp", action="store_true", help="không làm phẳng trang cong")
+    ap.add_argument("--no-spellfix", action="store_true", help="không sửa lỗi dấu OCR theo từ điển chính tả")
+    ap.add_argument("-v", "--verbose", action="store_true", help="in chi tiết (vd. từng từ đã sửa dấu)")
     ap.add_argument("--debug", action="store_true", help="lưu ảnh đánh dấu vùng cắt vào <thư mục ra>/debug")
     ap.add_argument(
         "--keep-duplicates",
@@ -77,7 +79,10 @@ def main(argv: list[str] | None = None) -> None:
     argv = sys.argv[1:] if argv is None else argv
     is_typeset = argv[:1] == ["typeset"]
     args = parse_typeset_args(argv[1:]) if is_typeset else parse_args(argv)
-    logging.basicConfig(level=logging.WARNING if args.quiet else logging.INFO, format="%(message)s")
+    level = (
+        logging.WARNING if args.quiet else logging.DEBUG if getattr(args, "verbose", False) else logging.INFO
+    )
+    logging.basicConfig(level=level, format="%(message)s")
     warnings.filterwarnings("ignore", category=FutureWarning, module="pymupdf")
     if is_typeset:
         typeset(args)
@@ -102,6 +107,7 @@ def main(argv: list[str] | None = None) -> None:
             debug_dir,
             drop_duplicates=not args.keep_duplicates,
             flatten=not args.no_dewarp,
+            spellfix=not args.no_spellfix,
         )
 
 
