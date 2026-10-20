@@ -5,9 +5,9 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from book_scanner.cleanup import clean_page
-from book_scanner.scan_pdf import write_scan_pdf
-from book_scanner.sources import load_images
+from snap2book.cleanup import clean_page
+from snap2book.scan_pdf import write_scan_pdf
+from snap2book.sources import load_images
 
 log = logging.getLogger(__name__)
 
@@ -50,10 +50,10 @@ def convert(inputs: Sequence[Path], outputs: Outputs, debug_dir: Path | None = N
         return outputs
 
     # import muộn: OCR cần macOS (Apple Vision), chế độ chỉ-ảnh thì không cần
-    from book_scanner.markdown import to_markdown
-    from book_scanner.ocr import ocr_page
-    from book_scanner.structure import build_book
-    from book_scanner.typeset import to_pdf
+    from snap2book.markdown import to_markdown
+    from snap2book.ocr import ocr_page
+    from snap2book.structure import build_book
+    from snap2book.typeset import to_pdf
 
     lines = []
     for idx, img in enumerate(pages, 1):

@@ -1,4 +1,4 @@
-from book_scanner.cli import main
+from snap2book.cli import main
 
 if __name__ == "__main__":
     main()

@@ -1,5 +1,5 @@
-from book_scanner.markdown import to_markdown
-from book_scanner.structure import build_book, note_ref
+from snap2book.markdown import to_markdown
+from snap2book.structure import build_book, note_ref
 
 
 def texts(book, kind="p"):

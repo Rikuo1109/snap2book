@@ -3,8 +3,8 @@ from pathlib import Path
 import pymupdf
 import pytest
 
-from book_scanner.structure import Block, Book, note_ref
-from book_scanner.typeset import FONT_DIR, FONT_FILE, Row, fix_first_bad_break, to_pdf
+from snap2book.structure import Block, Book, note_ref
+from snap2book.typeset import FONT_DIR, FONT_FILE, Row, fix_first_bad_break, to_pdf
 
 LEFT, INDENT = 35.0, 50.0
 

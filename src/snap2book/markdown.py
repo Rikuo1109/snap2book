@@ -1,6 +1,6 @@
 """Xuất nội dung sách ra Markdown (để đọc soát, sửa lỗi OCR)."""
 
-from book_scanner.structure import NOTE_REF, Book
+from snap2book.structure import NOTE_REF, Book
 
 _HEADING = {"h1": "##", "h2": "###"}  # "#" dành cho tên sách
 

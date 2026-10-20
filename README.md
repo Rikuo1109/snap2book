@@ -1,4 +1,4 @@
-# book-scanner
+# snap2book
 
 Chuyển ảnh chụp sách (PDF từ app scan của iPhone, hoặc ảnh rời) thành sách PDF gọn:
 làm sạch từng trang, OCR tiếng Việt rồi dàn trang lại thành nội dung liền mạch.
@@ -29,7 +29,7 @@ make debug                             # lưu thêm ảnh đánh dấu vùng c�
 Hoặc gọi trực tiếp sau khi cài (`make setup` hoặc `pip install -e .`):
 
 ```bash
-book-scanner resources/ -o output [--scan-only] [--debug] [-q]
+snap2book resources/ -o output [--scan-only] [--debug] [-q]
 ```
 
 Mỗi file PDF đầu vào là một cuốn; các ảnh rời `.jpg/.png/...` trong cùng thư mục, sắp theo tên,

@@ -1,4 +1,4 @@
-"""Dòng lệnh: book-scanner <file hoặc thư mục> [-o thư_mục_ra] [--scan-only] [--debug]
+"""Dòng lệnh: snap2book <file hoặc thư mục> [-o thư_mục_ra] [--scan-only] [--debug]
 
 Mỗi file PDF đầu vào (vd. PDF từ app scan của iPhone) là một cuốn sách; các ảnh rời
 .jpg/.png trong cùng thư mục (sắp theo tên) gộp thành một cuốn.
@@ -15,14 +15,14 @@ import sys
 import warnings
 from pathlib import Path
 
-from book_scanner import __version__
-from book_scanner.pipeline import convert, output_paths
-from book_scanner.sources import find_jobs
+from snap2book import __version__
+from snap2book.pipeline import convert, output_paths
+from snap2book.sources import find_jobs
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     ap = argparse.ArgumentParser(
-        prog="book-scanner", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+        prog="snap2book", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     ap.add_argument("input", type=Path, help="file PDF / ảnh, hoặc thư mục")
     ap.add_argument(

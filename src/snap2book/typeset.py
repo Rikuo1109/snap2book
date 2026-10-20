@@ -17,7 +17,7 @@ from typing import NamedTuple
 
 import pymupdf
 
-from book_scanner.structure import NOTE_REF, Book
+from snap2book.structure import NOTE_REF, Book
 
 FONT_DIR = "/System/Library/Fonts/Supplemental"  # Times New Roman có đủ dấu tiếng Việt
 FONT_FILE = "Times New Roman.ttf"

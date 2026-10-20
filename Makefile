@@ -12,7 +12,7 @@ OUT ?= output
 PYTHON ?= $(firstword $(wildcard $(HOME)/.pyenv/versions/3.12*/bin/python) python3)
 VENV := .venv
 BIN := $(VENV)/bin
-CLI := $(BIN)/book-scanner -o "$(OUT)"
+CLI := $(BIN)/snap2book -o "$(OUT)"
 
 .PHONY: all run scan debug setup test lint format clean distclean
 
