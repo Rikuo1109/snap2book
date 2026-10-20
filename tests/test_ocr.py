@@ -25,3 +25,13 @@ def test_alternate_image_reading_attached_to_matching_line():
     _attach_alternatives(lines, others)
     assert lines[0].alternatives == ["quyết định quay sang", "x"]
     assert lines[1].alternatives == ["dòng khác hẳn"]
+
+
+def test_tilted_lines_with_tall_boxes_are_not_merged():
+    # cuối trang chụp chéo: dòng nghiêng nên khung bao cao, chồng lên dòng kế theo chiều dọc
+    lines = [
+        Line("“Tôi hiểu điều đó. Ở độ tuổi của anh, ai cũng xấu xa", 0.214, 0.741, 0.958, 0.813),
+        Line("hết cả. Anh có tình cảm sâu đậm với người vợ Ayaka. Nhưng", 0.149, 0.769, 0.975, 0.860),
+        Line("thinh thoảng anh cũng muốn buông lời tán tinh cô Kocho", 0.156, 0.802, 0.986, 0.896),
+    ]
+    assert [line.text for line in merge_rows(lines)] == [line.text for line in lines]

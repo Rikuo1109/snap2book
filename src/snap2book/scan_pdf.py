@@ -5,7 +5,6 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-import pymupdf
 
 PAGE_WIDTH_PT = 420  # khổ A5 (148mm)
 CONTENT_WIDTH_PX = 1600  # ~300dpi trên A5 sau khi trừ lề
@@ -21,6 +20,10 @@ def write_scan_pdf(
     page_w = CONTENT_WIDTH_PX + 2 * pad
     page_h = int(CONTENT_WIDTH_PX * body_aspect) + 2 * pad
     pt_per_px = PAGE_WIDTH_PT / page_w
+
+    # import trong hàm: tiến trình con (spawn) chạy lại lệnh snap2book -> cli -> module này;
+    # pymupdf 2 nạp onnxruntime, và onnxruntime treo khi tiến trình con thoát (xem pages.py)
+    import pymupdf
 
     doc = pymupdf.open()
     for img in pages:

@@ -9,7 +9,7 @@ Không phụ thuộc OCR engine: chỉ cần các dòng có toạ độ chuẩn 
 """
 
 import re
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Literal, Protocol
 
@@ -86,6 +86,35 @@ def page_number(lines: Sequence[TextLine]) -> int | None:
     return None
 
 
+Margin = Callable[[float], float]  # lề (trái/phải) tại độ cao y của trang
+
+MIN_SLANT = 0.02  # lề trôi ít hơn chừng này từ dòng đầu tới dòng cuối: coi là thẳng đứng
+MIN_SLANT_LINES = 8  # ít dòng hơn thì không đủ để ước lượng lề nghiêng
+
+
+def _margin(ys: np.ndarray, xs: np.ndarray, side: Literal["left", "right"]) -> Margin:
+    """Lề trái/phải của trang theo độ cao y.
+
+    Thường lề thẳng đứng: trái = trung vị x0, phải = phân vị 90 của x1. Nhưng trang chụp chéo
+    góc (phối cảnh) thì khối chữ là hình thang, lề trôi dần theo chiều dọc; coi lề là hằng số thì
+    nửa trang trông như dòng nào cũng thụt đầu dòng / cũng là dòng cuối đoạn. Khi đó khớp lề
+    bằng đường thẳng x = a*y + b, lặp vài lượt bỏ các dòng lệch vào trong (thụt đầu dòng ở lề
+    trái, dòng ngắn cuối đoạn ở lề phải).
+    """
+    const = float(np.median(xs)) if side == "left" else float(np.percentile(xs, 90))
+    if len(xs) < MIN_SLANT_LINES:
+        return lambda y: const
+    keep = np.ones(len(xs), bool)
+    for _ in range(5):
+        coef = np.polyfit(ys[keep], xs[keep], 1)
+        resid = xs - np.polyval(coef, ys)
+        # bên lề: trái giữ 70% dòng lệch ít sang phải nhất, phải giữ 70% lệch ít sang trái nhất
+        keep = resid <= np.quantile(resid, 0.7) if side == "left" else resid >= np.quantile(resid, 0.3)
+    if abs(coef[0]) * (ys.max() - ys.min()) < MIN_SLANT:
+        return lambda y: const
+    return lambda y: float(np.polyval(coef, y))
+
+
 def _is_noise(text: str) -> bool:
     """Dòng rác (mẩu logo, vết bẩn): gần như không có chữ."""
     return sum(c.isalpha() for c in text) < 2 and not re.fullmatch(r"[\W\d]*[.!?…\"”]", text)
@@ -126,20 +155,24 @@ class _Builder:
         ]
         if not body:
             return
-        left = float(np.median([line.x0 for line in body]))
-        right = float(np.percentile([line.x1 for line in body], 90))
+        ys = np.array([(line.y0 + line.y1) / 2 for line in body])
+        left = _margin(ys, np.array([line.x0 for line in body]), "left")
+        right = _margin(ys, np.array([line.x1 for line in body]), "right")
 
         start = self._take_heading(body, left, right)
         end = self._take_footnote(body, start)
-        for line in body[start:end]:
-            self.add_line(line.text.strip(), starts_paragraph=line.x0 > left + INDENT)
-            if line.x1 < right - SHORT_LINE:
+        for line, y in zip(body[start:end], ys[start:end], strict=True):
+            self.add_line(line.text.strip(), starts_paragraph=line.x0 > left(y) + INDENT)
+            if line.x1 < right(y) - SHORT_LINE:
                 self.end_paragraph()
 
-    def _take_heading(self, body: Sequence[TextLine], left: float, right: float) -> int:
+    def _take_heading(self, body: Sequence[TextLine], left: Margin, right: Margin) -> int:
         """Tiêu đề chương = các dòng căn giữa ở đầu trang. Trả về chỉ số dòng thân bài đầu tiên."""
         i = 0
-        while i < len(body) and body[i].x0 > left + 0.1 and body[i].x1 < right - 0.1:
+        while i < len(body):
+            y = (body[i].y0 + body[i].y1) / 2
+            if not (body[i].x0 > left(y) + 0.1 and body[i].x1 < right(y) - 0.1):
+                break
             i += 1
         if i == 0 or i == len(body) or body[0].y0 >= 0.25:
             return 0
