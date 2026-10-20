@@ -9,6 +9,7 @@ import numpy as np
 
 LANGUAGE = "vi-VT"  # mã tiếng Việt của Vision (không phải vi-VN)
 CANDIDATES = 3  # số phương án đọc lấy cho mỗi dòng
+SIDE_OVERLAP = 0.3  # hai mảnh chồng ngang hơn chừng này (theo mảnh hẹp hơn) thì là hai dòng khác nhau
 ALT_MATCH = 0.6  # độ giống tối thiểu để coi một dòng ở ảnh phụ là cùng dòng
 
 
@@ -117,13 +118,20 @@ def _overlap(left: str, right: str, limit: int = 4) -> int:
 def merge_rows(lines: list[Line]) -> list[Line]:
     """Gộp các mảnh cùng một dòng (Vision đôi khi tách một dòng thành vài mảnh, lệch nhau
     vài px theo chiều dọc) thành một dòng, ghép chữ trái sang phải; sắp các dòng từ trên xuống.
-    Hai mảnh cùng dòng khi chồng nhau theo chiều dọc hơn nửa chiều cao mảnh thấp hơn."""
+    Hai mảnh cùng dòng khi chồng nhau theo chiều dọc hơn nửa chiều cao mảnh thấp hơn và gần như
+    không chồng nhau theo chiều ngang."""
     rows: list[list[Line]] = []
     for line in sorted(lines, key=lambda line: (line.y0 + line.y1) / 2):
         for row in rows:
             top, bottom = min(r.y0 for r in row), max(r.y1 for r in row)
             overlap = min(bottom, line.y1) - max(top, line.y0)
-            if overlap > 0.5 * min(line.y1 - line.y0, bottom - top):
+            # mảnh của cùng một dòng nằm cạnh nhau; hai dòng khác nhau (dòng nghiêng nên khung bao
+            # cao, chồng lên dòng kế) thì trải trên cùng khoảng ngang
+            side_by_side = all(
+                min(r.x1, line.x1) - max(r.x0, line.x0) < SIDE_OVERLAP * min(r.x1 - r.x0, line.x1 - line.x0)
+                for r in row
+            )
+            if overlap > 0.5 * min(line.y1 - line.y0, bottom - top) and side_by_side:
                 row.append(line)
                 break
         else:

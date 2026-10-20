@@ -8,7 +8,6 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-import pymupdf
 
 log = logging.getLogger(__name__)
 
@@ -24,6 +23,10 @@ def load_images(path: Path) -> Iterator[np.ndarray]:
             raise ValueError(f"Không đọc được ảnh: {path}")
         yield img
         return
+
+    # import trong hàm: tiến trình con (spawn) chạy lại lệnh snap2book -> cli -> module này;
+    # pymupdf 2 nạp onnxruntime, và onnxruntime treo khi tiến trình con thoát (xem pages.py)
+    import pymupdf
 
     with pymupdf.open(path) as doc:
         for page in doc:

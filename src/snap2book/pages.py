@@ -5,7 +5,9 @@ từ nhiều luồng trong một tiến trình không nhanh hơn chạy tuần t
 26 ảnh mất 16s tuần tự, 15-17s với 2-8 luồng, 4s với 8 tiến trình; kết quả giống hệt).
 
 Tiến trình chính đọc ảnh (sources) rồi gửi sang; tiến trình con không được import pymupdf:
-pymupdf 2 nạp onnxruntime, và onnxruntime bị treo khi tiến trình con thoát.
+pymupdf 2 nạp onnxruntime, và onnxruntime bị treo khi tiến trình con thoát. Lưu ý spawn chạy lại
+module chính (lệnh snap2book -> cli -> pipeline -> sources, scan_pdf), nên các module đó chỉ
+import pymupdf bên trong hàm; tests/test_pages.py kiểm tra điều này.
 """
 
 from collections import deque
