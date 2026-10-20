@@ -1,5 +1,6 @@
 """Dòng lệnh:
-  snap2book <file hoặc thư mục> [-o thư_mục_ra] [--scan-only] [--no-dewarp] [--no-spellfix] [--debug]
+  snap2book <file hoặc thư mục> [-o thư_mục_ra] [-j số_tiến_trình] [--no-cache] [--scan-only]
+            [--no-dewarp] [--no-spellfix] [--debug]
   snap2book typeset <file .md> [-o file.pdf]     dàn trang lại từ Markdown đã sửa
 
 Mỗi file PDF đầu vào (vd. PDF từ app scan của iPhone) là một cuốn sách; các ảnh rời
@@ -10,12 +11,16 @@ Mỗi file PDF đầu vào (vd. PDF từ app scan của iPhone) là một cuốn
   <tên>.md          nội dung dạng text, để soát/sửa lỗi OCR
   <tên> - scan.pdf  ảnh các trang đã làm sạch (để đối chiếu)
 
+Kết quả làm sạch + OCR từng trang được cache trong <thư mục ra>/.cache/<tên>/, chạy lại
+(vd. sau khi thêm vài ảnh) chỉ phải xử lý các trang mới / đã đổi.
+
 Sau khi soát/sửa lỗi OCR trong <tên>.md, chạy "snap2book typeset <tên>.md" để dàn lại
 <tên>.pdf (mặc định ghi cạnh file .md).
 """
 
 import argparse
 import logging
+import os
 import sys
 import warnings
 from pathlib import Path
@@ -33,6 +38,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     ap.add_argument(
         "-o", "--out-dir", type=Path, default=Path("output"), help="thư mục ra (mặc định: output)"
     )
+    ap.add_argument(
+        "-j",
+        "--jobs",
+        type=_positive_int,
+        default=os.cpu_count() or 1,
+        help="số trang xử lý song song (mặc định: số nhân CPU, %(default)s)",
+    )
+    ap.add_argument(
+        "--no-cache", action="store_true", help="không dùng / không ghi cache, làm sạch và OCR lại mọi trang"
+    )
     ap.add_argument("--scan-only", action="store_true", help="không OCR, chỉ xuất PDF ảnh đã làm sạch")
     ap.add_argument("--no-dewarp", action="store_true", help="không làm phẳng trang cong")
     ap.add_argument("--no-spellfix", action="store_true", help="không sửa lỗi dấu OCR theo từ điển chính tả")
@@ -46,6 +61,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     ap.add_argument("-q", "--quiet", action="store_true", help="chỉ in lỗi")
     ap.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     return ap.parse_args(argv)
+
+
+def _positive_int(text: str) -> int:
+    n = int(text)
+    if n < 1:
+        raise argparse.ArgumentTypeError(f"phải >= 1: {text}")
+    return n
 
 
 def parse_typeset_args(argv: list[str]) -> argparse.Namespace:
@@ -108,6 +130,8 @@ def main(argv: list[str] | None = None) -> None:
             drop_duplicates=not args.keep_duplicates,
             flatten=not args.no_dewarp,
             spellfix=not args.no_spellfix,
+            jobs=args.jobs,
+            cache_dir=None if args.no_cache else args.out_dir / ".cache" / name,
         )
 
 

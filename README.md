@@ -30,7 +30,7 @@ make typeset MD=output/sach.md         # dàn lại sach.pdf từ file .md đã 
 Hoặc gọi trực tiếp sau khi cài (`make setup` hoặc `pip install -e .`):
 
 ```bash
-snap2book resources/ -o output [--scan-only] [--no-dewarp] [--no-spellfix] [--debug] [-v] [--keep-duplicates] [-q]
+snap2book resources/ -o output [-j N] [--no-cache] [--scan-only] [--no-dewarp] [--no-spellfix] [--debug] [-v] [--keep-duplicates] [-q]
 snap2book typeset output/sach.md [-o sach.pdf] [-q]
 ```
 
@@ -40,6 +40,31 @@ gộp thành một cuốn.
 Sau OCR, script đọc số trang in ở header/footer để cảnh báo trang bị thiếu, trang chụp 2 lần
 hoặc ảnh sai thứ tự. Trang chụp 2 lần liền nhau chỉ giữ ảnh đọc được nhiều dòng hơn
 (`--keep-duplicates` để giữ cả).
+
+### Sách dài: xử lý song song và cache
+
+Các trang được làm sạch và OCR song song, mỗi trang một tiến trình (`-j N`, mặc định bằng số
+nhân CPU; `-j 1` chạy tuần tự). Apple Vision gọi từ nhiều luồng trong cùng một tiến trình không
+nhanh hơn chạy tuần tự, nên dùng tiến trình chứ không dùng luồng. Bước sửa dấu cần từ vựng của
+cả cuốn nên vẫn chạy sau khi mọi trang đã OCR xong.
+
+Kết quả từng trang (ảnh đã làm sạch, các dòng OCR kèm toạ độ và phương án đọc) được lưu trong
+`output/.cache/<tên>/`. Khoá cache gồm nội dung ảnh gốc, tuỳ chọn làm phẳng và phiên bản code
+(mã nguồn phần làm sạch / OCR, bản macOS), nên chạy lại chỉ phải xử lý các trang mới thêm, ảnh
+đã đổi, hoặc khi đổi tuỳ chọn / sửa code. Trang không dùng tới quá 30 ngày tự bị xoá khỏi cache;
+`--no-cache` để bỏ qua cache, `make clean` xoá cả `output/` lẫn cache. `--debug` luôn làm sạch
+lại (để vẽ ảnh đánh dấu) nhưng vẫn dùng OCR đã cache.
+
+Thời gian trên sách mẫu (9 ảnh, máy 11 nhân đang bận việc khác, load ~10):
+
+| | Thời gian |
+|---|---|
+| Trước (tuần tự, không cache) | 13–14 s |
+| Lần đầu, `-j` mặc định | 8–9 s |
+| Chạy lại, mọi trang có trong cache | 1.7 s |
+
+Riêng OCR 26 ảnh: tuần tự 16 s, 2–8 luồng 15–17 s, 8 tiến trình 4 s. Sách càng dài thì lợi
+càng rõ, vì chi phí khởi động tiến trình (nạp OpenCV, Vision) chỉ trả một lần.
 
 ### Sửa lỗi OCR rồi dàn trang lại
 
@@ -63,6 +88,9 @@ sources ─► cleanup ─► dewarp ─► scan_pdf                            
                                                           └─► typeset     (<tên>.pdf) ◄┘ snap2book typeset
 ```
 
+`cleanup`, `dewarp`, `ocr` chạy song song theo trang và được cache (`pages.py`, `cache.py`);
+từ `spellfix` trở đi chạy trên cả cuốn.
+
 | Module | Việc |
 |---|---|
 | `sources.py` | Đọc ảnh từ PDF/ảnh rời, gom đầu vào thành từng cuốn |
@@ -75,6 +103,8 @@ sources ─► cleanup ─► dewarp ─► scan_pdf                            
 | `spellfix.py` | Sửa lỗi dấu OCR: từ sai chính tả được thay bằng phương án đọc khác hoặc từ cùng chữ cái trong sách (từ điển tiếng Việt của macOS) |
 | `markdown.py` | Xuất Markdown (chú thích dạng `[^1]`) và đọc ngược lại để dàn trang bản đã sửa |
 | `typeset.py` | Dàn trang PDF: chú thích ở chân trang có số mũ, chống dòng mồ côi |
+| `pages.py` | Làm sạch + OCR từng trang song song nhiều tiến trình, giữ đúng thứ tự trang |
+| `cache.py` | Cache ảnh đã làm sạch và dòng OCR của từng trang trong `output/.cache/` |
 | `pipeline.py`, `cli.py` | Điều phối các bước, dòng lệnh |
 
 ## Phát triển
