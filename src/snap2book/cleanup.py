@@ -25,6 +25,7 @@ class CleanedPage:
     angle: float  # góc đã xoay (độ)
     curve: float = 0.0  # độ võng dòng chữ trước khi làm phẳng (px)
     flattened: bool = False  # đã làm phẳng hay chưa (trang gần như phẳng thì giữ nguyên)
+    unflattened: np.ndarray | None = None  # ảnh trước khi làm phẳng (chỉ khi có làm phẳng)
 
 
 def flatten_illumination(gray: np.ndarray) -> np.ndarray:
@@ -168,4 +169,6 @@ def clean_page(gray: np.ndarray, debug_path: Path | None = None, flatten: bool =
     # làm phẳng trên ảnh xám rồi mới tăng tương phản: nội suy trên ảnh đã gần đen-trắng
     # làm răng cưa nét dấu nhỏ, OCR đọc sai dấu
     flat, curve = dewarp(crop)
-    return CleanedPage(enhance(flat), angle, curve, flattened=flat is not crop)
+    if flat is crop:
+        return CleanedPage(enhance(crop), angle, curve)
+    return CleanedPage(enhance(flat), angle, curve, flattened=True, unflattened=enhance(crop))

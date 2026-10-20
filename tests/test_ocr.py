@@ -15,3 +15,13 @@ def test_fragments_of_one_row_are_merged_left_to_right():
         "dòng sau",
     ]
     assert merged[1].x0 == 0.03
+
+
+def test_alternate_image_reading_attached_to_matching_line():
+    from snap2book.ocr import _attach_alternatives
+
+    lines = [Line("quyết dịnh quay sang", 0, 0.1, 1, 0.13), Line("dòng khác hẳn", 0, 0.2, 1, 0.23)]
+    others = [Line("dòng khác hẳn", 0, 0.21, 1, 0.24), Line("quyết định quay sang", 0, 0.11, 1, 0.14, ["x"])]
+    _attach_alternatives(lines, others)
+    assert lines[0].alternatives == ["quyết định quay sang", "x"]
+    assert lines[1].alternatives == ["dòng khác hẳn"]

@@ -33,21 +33,24 @@ def convert(
     debug_dir: Path | None = None,
     drop_duplicates: bool = True,
     flatten: bool = True,
+    spellfix: bool = True,
 ) -> Outputs:
     """Xử lý các file đầu vào (theo thứ tự trang) thành một cuốn sách.
     outputs.text_pdf = None thì bỏ qua OCR, chỉ xuất PDF ảnh.
     drop_duplicates: bỏ nội dung ảnh chụp lặp một trang (theo số trang in).
-    flatten: làm phẳng trang cong."""
+    flatten: làm phẳng trang cong. spellfix: sửa lỗi dấu theo từ điển chính tả."""
     if debug_dir:
         debug_dir.mkdir(parents=True, exist_ok=True)
 
     pages = []
+    unflattened = []  # ảnh trước khi làm phẳng, dùng làm phương án OCR phụ
     for src in inputs:
         for gray in load_images(src):
             idx = len(pages) + 1
             debug_path = debug_dir / f"page_{idx:03d}.jpg" if debug_dir else None
             page = clean_page(gray, debug_path, flatten)
             pages.append(page.image)
+            unflattened.append(page.unflattened)
             flat = f", làm phẳng (võng {page.curve:.0f}px)" if page.flattened else ""
             log.info(
                 "  trang %d: xoay %+.1f°%s, vùng chữ %dx%d", idx, page.angle, flat, *page.image.shape[::-1]
@@ -68,9 +71,19 @@ def convert(
     from snap2book.typeset import to_pdf
 
     lines = []
-    for idx, img in enumerate(pages, 1):
-        lines.append(ocr_page(img))
+    for idx, (img, alt) in enumerate(zip(pages, unflattened, strict=True), 1):
+        lines.append(ocr_page(img, alt if spellfix else None))
         log.info("  OCR trang %d: %d dòng", idx, len(lines[-1]))
+
+    if spellfix:
+        from snap2book.spellfix import MacSpellChecker, fix_pages
+
+        # cần cả sách để biết tần suất từ, nên sửa sau khi OCR xong mọi trang
+        per_page = fix_pages(lines, MacSpellChecker())
+        for idx, changes in enumerate(per_page, 1):
+            for c in changes:
+                log.debug("    trang %d: %s → %s | %s", idx, c.before, c.after, c.line)
+        log.info("  sửa dấu: %d từ", sum(len(c) for c in per_page))
 
     check = check_pages([page_number(page) for page in lines], [len(page) for page in lines])
     for msg in check.warnings:

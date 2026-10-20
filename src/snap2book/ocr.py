@@ -1,12 +1,15 @@
 """OCR tiếng Việt bằng Apple Vision (chỉ chạy trên macOS)."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from difflib import SequenceMatcher
 from itertools import pairwise
 
 import cv2
 import numpy as np
 
 LANGUAGE = "vi-VT"  # mã tiếng Việt của Vision (không phải vi-VN)
+CANDIDATES = 3  # số phương án đọc lấy cho mỗi dòng
+ALT_MATCH = 0.6  # độ giống tối thiểu để coi một dòng ở ảnh phụ là cùng dòng
 
 
 @dataclass
@@ -18,6 +21,7 @@ class Line:
     y0: float
     x1: float
     y1: float
+    alternatives: list[str] = field(default_factory=list)  # các phương án đọc khác của dòng
 
 
 def recognize(img: np.ndarray) -> list[Line]:
@@ -39,24 +43,38 @@ def recognize(img: np.ndarray) -> list[Line]:
     for obs in req.results() or []:
         b = obs.boundingBox()  # gốc dưới-trái
         y0 = 1 - b.origin.y - b.size.height
-        lines.append(
-            Line(
-                obs.topCandidates_(1)[0].string(),
-                b.origin.x,
-                y0,
-                b.origin.x + b.size.width,
-                y0 + b.size.height,
-            )
-        )
+        text, *alts = [c.string() for c in obs.topCandidates_(CANDIDATES)]
+        lines.append(Line(text, b.origin.x, y0, b.origin.x + b.size.width, y0 + b.size.height, alts))
     return lines
 
 
-def ocr_page(img: np.ndarray) -> list[Line]:
+def ocr_page(img: np.ndarray, alt: np.ndarray | None = None) -> list[Line]:
     """OCR một trang đã làm sạch (ảnh xám, nền trắng), các dòng sắp từ trên xuống.
 
-    Chữ hoa lớn đầu chương (drop cap) làm Vision gộp hai dòng cạnh nó thành một dòng
-    sai, nên thu nhỏ nó về cỡ chữ thường và đặt sát đầu dòng thứ nhất trước khi OCR.
+    alt: một ảnh khác của cùng trang (vd. trước khi làm phẳng); kết quả OCR của nó được
+    gắn vào Line.alternatives của dòng tương ứng, làm phương án đọc phụ.
     """
+    lines = _read(img)
+    if alt is not None:
+        _attach_alternatives(lines, _read(alt))
+    return lines
+
+
+def _attach_alternatives(lines: list[Line], others: list[Line]) -> None:
+    """Gắn mỗi dòng ở others vào dòng giống nó nhất (theo nội dung chữ, vì toạ độ hai ảnh lệch nhau)."""
+    for other in others:
+        best, score = None, ALT_MATCH
+        for line in lines:
+            ratio = SequenceMatcher(None, line.text, other.text, autojunk=False).ratio()
+            if ratio > score:
+                best, score = line, ratio
+        if best is not None:
+            best.alternatives += [other.text, *other.alternatives]
+
+
+def _read(img: np.ndarray) -> list[Line]:
+    """OCR một ảnh trang. Chữ hoa lớn đầu chương (drop cap) làm Vision gộp hai dòng cạnh nó
+    thành một dòng sai, nên thu nhỏ nó về cỡ chữ thường và đặt sát đầu dòng thứ nhất trước."""
     h, w = img.shape
     ink = (img < 128).astype(np.uint8)
     _, _, stats, _ = cv2.connectedComponentsWithStats(ink, 8)
@@ -126,6 +144,8 @@ def merge_rows(lines: list[Line]) -> list[Line]:
                 min(line.y0 for line in row),
                 max(line.x1 for line in row),
                 max(line.y1 for line in row),
+                # phương án đọc khác chỉ áp được cho cả dòng khi dòng là một mảnh
+                row[0].alternatives if len(row) == 1 else [],
             )
         )
     merged.sort(key=lambda line: (line.y0, line.x0))

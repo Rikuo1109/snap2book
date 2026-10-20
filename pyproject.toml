@@ -13,6 +13,7 @@ dependencies = [
     "opencv-python-headless",
     "pymupdf>=1.24",
     "pyobjc-framework-Vision; sys_platform == 'darwin'",  # OCR (Apple Vision)
+    "pyobjc-framework-Cocoa; sys_platform == 'darwin'",  # từ điển chính tả (NSSpellChecker)
 ]
 
 [project.optional-dependencies]
