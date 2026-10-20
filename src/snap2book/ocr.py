@@ -88,7 +88,8 @@ def _read(img: np.ndarray) -> list[Line]:
     caps = []
     for x, y, bw, bh, _ in stats[1:]:
         # chữ cao 2.5-6 lần chữ thường, nằm ở lề trái, dưới vùng tiêu đề
-        if 2.5 * glyph_h < bh < 6 * glyph_h and x < 0.15 * w and y > 0.1 * h:
+        # (không xét 10% cuối trang: hình trang trí ở chân trang, vd. logo cạnh số trang)
+        if 2.5 * glyph_h < bh < 6 * glyph_h and x < 0.15 * w and y > 0.1 * h and y + bh < 0.9 * h:
             caps.append((x, y, bw, bh))
             nh = int(glyph_h * 1.6)
             nw = max(1, int(bw * nh / bh))

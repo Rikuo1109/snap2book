@@ -46,7 +46,9 @@ def note_ref(n: int) -> str:
 
 INDENT = 0.03  # dòng lùi vào hơn lề trái chừng này (theo chiều rộng trang) = đầu đoạn
 SHORT_LINE = 0.12  # dòng ngắn hơn lề phải chừng này = cuối đoạn
-FOOTER_TOP = 0.92  # dòng nằm dưới mức này (theo chiều cao trang) là vùng chân trang
+FOOTER_TOP = 0.92  # dòng nằm dưới mức này (theo chiều cao trang) luôn thuộc vùng chân trang
+FOOTER_MIN_TOP = 0.8  # hàng cuối trang tách xa phần trên (FOOTER_GAP) và thấp hơn mức này: chân trang
+FOOTER_GAP = 1.6  # khoảng cách tới hàng trên, tính theo khoảng cách dòng thường của trang
 HEADER_BOTTOM = 0.06
 
 # số mũ chú thích thường bị OCR đọc thành dấu nháy: "Sotori'"
@@ -59,14 +61,41 @@ def _is_upper(s: str) -> bool:
     return len(letters) >= 3 and sum(c.isupper() for c in letters) / len(letters) > 0.8
 
 
-def _is_running_line(line: TextLine, index: int) -> bool:
+def _footer_top(lines: Sequence[TextLine]) -> float:
+    """Mép trên vùng chân trang. Ảnh cắt rộng thì chân trang có thể nằm cao hơn FOOTER_TOP, nên
+    xét theo trang: hàng cuối cùng (các dòng cùng độ cao, vd. số trang và tên sách) cách hàng trên
+    xa hơn hẳn khoảng cách dòng thường thì là chân trang."""
+    rows: list[list[float]] = []  # tâm các dòng, gom theo hàng
+    for line in sorted(lines, key=lambda line: (line.y0 + line.y1) / 2):
+        center = (line.y0 + line.y1) / 2
+        if rows and center - rows[-1][-1] < 0.5 * (line.y1 - line.y0):
+            rows[-1].append(center)
+        else:
+            rows.append([center])
+    if len(rows) < 4:
+        return FOOTER_TOP
+    centers = [float(np.mean(r)) for r in rows]
+    pitch = float(np.median(np.diff(centers)))
+    last = [line for line in lines if abs((line.y0 + line.y1) / 2 - centers[-1]) < 0.5 * pitch]
+    top = min(line.y0 for line in last)
+    if centers[-1] - centers[-2] > FOOTER_GAP * pitch and top > FOOTER_MIN_TOP:
+        return min(top, FOOTER_TOP)
+    return FOOTER_TOP
+
+
+def _running_flags(lines: Sequence[TextLine]) -> list[bool]:
     """Header/footer: dòng ở mép trên/dưới chỉ là số, hoặc viết hoa (tên sách, tác giả)."""
-    text = line.text.strip()
-    at_bottom = line.y0 > FOOTER_TOP
-    at_top = line.y1 < HEADER_BOTTOM and index == 0
-    if re.fullmatch(r"[\d\s]+", text):
-        return at_bottom or at_top
-    return at_bottom and _is_upper(text)
+    footer_top = _footer_top(lines) if lines else FOOTER_TOP
+    flags = []
+    for index, line in enumerate(lines):
+        text = line.text.strip()
+        at_bottom = line.y0 >= footer_top
+        at_top = line.y1 < HEADER_BOTTOM and index == 0
+        if re.fullmatch(r"[\d\s]+", text):
+            flags.append(at_bottom or at_top)
+        else:
+            flags.append(at_bottom and _is_upper(text))
+    return flags
 
 
 _EDGE_NUMBER = re.compile(r"^\W*(\d{1,4})\b|\b(\d{1,4})\W*$")
@@ -76,7 +105,7 @@ def page_number(lines: Sequence[TextLine]) -> int | None:
     """Số trang in trên trang (lấy từ header/footer), None nếu không đọc được.
     Ưu tiên dòng chỉ có số; sau đó số ở đầu/cuối dòng header/footer ("SAKAGUCHI ANGO 7",
     "10 VỤ ÁN SÁT NHÂN...")."""
-    running = [line.text.strip() for i, line in enumerate(lines) if _is_running_line(line, i)]
+    running = [line.text.strip() for line, run in zip(lines, _running_flags(lines), strict=True) if run]
     for text in running:
         if re.fullmatch(r"\d{1,4}", digits := text.replace(" ", "")):
             return int(digits)
@@ -150,8 +179,8 @@ class _Builder:
         self.book.page_numbers.append(page_number(lines))
         body = [
             line
-            for i, line in enumerate(lines)
-            if not _is_running_line(line, i) and not _is_noise(line.text.strip())
+            for line, running in zip(lines, _running_flags(lines), strict=True)
+            if not running and not _is_noise(line.text.strip())
         ]
         if not body:
             return

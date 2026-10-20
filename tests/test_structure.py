@@ -98,3 +98,19 @@ def test_ocr_single_quote_opening_dialogue_fixed(page):
         ]
     )
     assert texts(book) == ['"Đương nhiên là có rồi." Kazuma nói.', "'tôi' là người kể."]
+
+
+def test_footer_found_above_fixed_line_when_page_cropped_loosely(page):
+    body = [(f"dòng nội dung {k} của trang sách", "body") for k in range(20)]
+    lines = page(*body)  # các dòng cách nhau 0.035, dòng cuối ở khoảng 0.72
+    lines += page(("22", "last", 0.83), ("VỤ ÁN SÁT NHÂN KHÔNG LIÊN HOÀN", "center", 0.83))
+    book = build_book([lines])
+    assert "VỤ ÁN" not in " ".join(b.text for b in book.blocks)
+    assert "22" not in " ".join(b.text for b in book.blocks)
+    assert book.page_numbers == [22]
+
+
+def test_last_body_line_not_mistaken_for_footer(page):
+    body = [(f"dòng {k} của đoạn văn rất dài", "body") for k in range(20)]
+    lines = page(*body, ("HẾT", "center"))  # chữ hoa nhưng sát ngay dòng trên: không phải chân trang
+    assert "HẾT" in " ".join(b.text for b in build_book([lines]).blocks)
