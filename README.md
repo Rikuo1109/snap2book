@@ -3,14 +3,14 @@
 Chuyển ảnh chụp sách (PDF từ app scan của iPhone, hoặc ảnh rời) thành sách PDF gọn:
 làm sạch từng trang, OCR tiếng Việt rồi dàn trang lại thành nội dung liền mạch.
 
-Mỗi cuốn sách cho ra 4 file trong `output/`:
+Mỗi cuốn sách cho ra các file trong `output/`:
 
 | File | Nội dung |
 |---|---|
-| `<tên>.pdf` | Sách dàn trang lại từ chữ OCR: khổ A5, tìm kiếm/copy được, chú thích ở chân trang |
 | `<tên>.epub` | Sách điện tử để đọc trên điện thoại: chữ tự dàn theo màn hình, chỉnh cỡ chữ, mục lục theo chương, bấm số mũ để xem chú thích |
 | `<tên>.md` | Nội dung dạng text, để đọc soát và sửa lỗi OCR (chạy lại không ghi đè bản đã sửa) |
-| `<tên> - scan.pdf` | Ảnh các trang đã làm sạch, để đối chiếu với bản gốc |
+| `<tên> - scan.pdf` | Ảnh các trang đã làm sạch, để đối chiếu khi soát lỗi (chỉ nằm trên máy, không lên iCloud) |
+| `<tên>.pdf` | Chỉ khi có `--pdf` / `PDF=1`: sách dàn trang lại khổ A5, chú thích ở chân trang |
 
 ## Yêu cầu
 
@@ -25,7 +25,8 @@ make                                   # lần đầu tự tạo .venv; xử lý
 make run IN=duong/dan/sach.pdf         # một file hoặc thư mục cụ thể; OUT=thư mục ra
 make scan                              # chỉ xuất bản ảnh đã làm sạch, không OCR
 make debug                             # lưu thêm ảnh đánh dấu vùng cắt vào output/debug/
-make typeset MD=output/sach.md         # dàn lại sach.pdf từ file .md đã sửa
+make typeset MD=output/sach.md         # dựng lại sach.epub từ file .md đã sửa
+make icloud PDF=1                      # xuất thêm PDF chữ khổ A5
 make FORCE=1                           # ghi đè cả file .md đã sửa tay
 make icloud                            # xử lý bản quét trong iCloud Drive/snap2book/Bản quét → Sách đã xử lý
 make books                             # như make, rồi thêm PDF vào app Sách trên Mac
@@ -34,8 +35,8 @@ make books                             # như make, rồi thêm PDF vào app Sá
 Hoặc gọi trực tiếp sau khi cài (`make setup` hoặc `pip install -e .`):
 
 ```bash
-snap2book resources/ -o output [-j N] [--no-cache] [--scan-only] [--no-dewarp] [--no-spellfix] [--debug] [-v] [--keep-duplicates] [--force] [--to-books] [--to-icloud [THƯ_MỤC]] [-q]
-snap2book typeset output/sach.md [-o sach.pdf] [--to-books] [--to-icloud [THƯ_MỤC]] [-q]
+snap2book resources/ -o output [-j N] [--no-cache] [--scan-only] [--pdf] [--no-dewarp] [--no-spellfix] [--debug] [-v] [--keep-duplicates] [--force] [--to-books] [--to-icloud [THƯ_MỤC]] [-q]
+snap2book typeset output/sach.md [-o sach.epub] [--pdf] [--to-books] [--to-icloud [THƯ_MỤC]] [-q]
 ```
 
 Mỗi file PDF đầu vào là một cuốn; các ảnh rời `.jpg/.png/...` trong cùng thư mục, sắp theo tên,
@@ -72,16 +73,16 @@ càng rõ, vì chi phí khởi động tiến trình (nạp OpenCV, Vision) ch�
 
 ### Sửa lỗi OCR rồi dàn trang lại
 
-1. Chụp sách, chạy `make` → có `output/<tên>.md` và `output/<tên>.pdf`.
+1. Chụp sách, chạy `make` → có `output/<tên>.md` và `output/<tên>.epub`.
 2. Mở `output/<tên>.md`, đối chiếu với `<tên> - scan.pdf` và sửa lỗi OCR. Giữ đúng dạng:
    `## ` tiêu đề chương, `### ` tiêu đề phụ, các đoạn cách nhau bằng dòng trống, chú thích
    ghi `[^n]` trong bài và `[^n]: nội dung` ở cuối file (số thứ tự được đánh lại tự động).
-3. `make typeset MD="output/<tên>.md"` → ghi đè `output/<tên>.pdf` và `<tên>.epub` bằng bản đã sửa.
+3. `make typeset MD="output/<tên>.md"` → ghi đè `output/<tên>.epub` bằng bản đã sửa (`PDF=1` thêm PDF).
 
 Chạy lại `make` trên cùng cuốn sách không làm mất phần đã sửa: mỗi lần ghi `<tên>.md`, script
 lưu kèm mã băm vào file ẩn `output/.<tên>.md.sha256`. Lần chạy sau, nếu `<tên>.md` khác mã băm
 đó (tức đã sửa tay), script giữ nguyên nó, ghi bản OCR mới ra `<tên>.ocr.md` để so sánh, in cảnh
-báo và dàn `<tên>.pdf` từ bản đã sửa (`<tên> - scan.pdf` vẫn được làm lại). File `.md` không có
+báo và dựng sách từ bản đã sửa (`<tên> - scan.pdf` vẫn được làm lại). File `.md` không có
 mã băm (xuất từ bản cũ) cũng được giữ lại cho chắc. Muốn ghi đè bằng bản OCR mới: thêm `--force`
 (`make run IN=... FORCE=1`).
 
@@ -103,8 +104,7 @@ snap2book/
    "…" → **Quét tài liệu**. Đổi tên file thành tên sách (hoặc `1`, `2`, … nếu để trong thư mục sách).
 2. Mac, trong Terminal: `make icloud` (tự tạo `Bản quét` nếu chưa có). Trang đã xử lý lần trước được
    lấy từ cache, chỉ trang mới phải OCR.
-3. iPhone: app **Tệp** → snap2book → **Sách đã xử lý**. Mở file **`.epub`** rồi Chia sẻ → **Sách** để đọc
-   thoải mái nhất (chữ tự dàn theo màn hình); `.pdf` giữ đúng bố cục trang A5.
+3. iPhone: app **Tệp** → snap2book → **Sách đã xử lý** → mở file **`.epub`**, Chia sẻ → **Sách**.
 
 Mỗi file PDF trong `Bản quét` là một cuốn; mỗi thư mục con là một cuốn, gồm mọi PDF và ảnh trong đó
 theo thứ tự tên ("2" trước "10"). Nếu một file PDF trùng tên với thư mục con thì dùng thư mục con.
@@ -131,8 +131,8 @@ nằm gần giữa nhất.
 sources ─► cleanup ─► dewarp ─► scan_pdf                                  (<tên> - scan.pdf)
                         │
                         └─► ocr ─► spellfix ─► structure ─┬─► markdown    (<tên>.md) ─┐ sửa tay
-                                                          ├─► typeset     (<tên>.pdf)  ◄┤ snap2book typeset
-                                                          └─► epub        (<tên>.epub) ◄┘
+                                                          ├─► epub        (<tên>.epub) ◄┤ snap2book typeset
+                                                          └─► typeset     (<tên>.pdf, --pdf) ◄┘
 ```
 
 `cleanup`, `dewarp`, `ocr` chạy song song theo trang và được cache (`pages.py`, `cache.py`);

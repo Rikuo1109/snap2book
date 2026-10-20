@@ -21,20 +21,26 @@ log = logging.getLogger(__name__)
 @dataclass
 class Outputs:
     scan_pdf: Path  # ảnh các trang đã làm sạch
-    text_pdf: Path | None = None  # sách dàn trang lại từ chữ OCR
+    text_pdf: Path | None = None  # sách dàn trang lại từ chữ OCR (khổ A5, chỉ khi cần --pdf)
     markdown: Path | None = None  # nội dung dạng text
     epub: Path | None = None  # sách điện tử (chữ tự dàn theo màn hình)
 
     def books(self) -> list[Path]:
         """Các file sách để đọc (PDF chữ, EPUB); chế độ chỉ-ảnh thì là PDF ảnh."""
-        found = [p for p in (self.text_pdf, self.epub) if p]
+        found = [p for p in (self.epub, self.text_pdf) if p]
         return found or [self.scan_pdf]
 
+    def wants_text(self) -> bool:
+        """Có xuất bản chữ nào không (không thì bỏ qua OCR, chỉ xuất PDF ảnh)."""
+        return any((self.epub, self.markdown, self.text_pdf))
 
-def output_paths(out_dir: Path, name: str) -> Outputs:
+
+def output_paths(out_dir: Path, name: str, pdf: bool = False) -> Outputs:
+    """Mặc định xuất EPUB (đọc trên điện thoại) + Markdown (soát lỗi) + PDF ảnh (đối chiếu);
+    pdf=True thêm PDF chữ khổ A5."""
     return Outputs(
         scan_pdf=out_dir / f"{name} - scan.pdf",
-        text_pdf=out_dir / f"{name}.pdf",
+        text_pdf=out_dir / f"{name}.pdf" if pdf else None,
         markdown=out_dir / f"{name}.md",
         epub=out_dir / f"{name}.epub",
     )
@@ -52,7 +58,7 @@ def convert(
     force: bool = False,
 ) -> Outputs:
     """Xử lý các file đầu vào (theo thứ tự trang) thành một cuốn sách.
-    outputs.text_pdf = None thì bỏ qua OCR, chỉ xuất PDF ảnh.
+    Không xuất bản chữ nào (epub/markdown/text_pdf đều None) thì bỏ qua OCR, chỉ xuất PDF ảnh.
     drop_duplicates: bỏ nội dung ảnh chụp lặp một trang (theo số trang in).
     flatten: làm phẳng trang cong. spellfix: sửa lỗi dấu theo từ điển chính tả.
     jobs: số tiến trình xử lý trang song song (mặc định: số nhân CPU).
@@ -68,7 +74,7 @@ def convert(
                 idx += 1
                 yield PageTask(gray, debug_dir / f"page_{idx:03d}.jpg" if debug_dir else None)
 
-    do_ocr = outputs.text_pdf is not None
+    do_ocr = outputs.wants_text()
     settings = Settings(flatten, do_ocr, with_alt=spellfix, cache_dir=cache_dir)
 
     pages, lines, hits = [], [], 0
@@ -123,20 +129,21 @@ def convert(
         log.warning("  bỏ ảnh chụp lặp: %s", ", ".join(str(i + 1) for i in check.duplicates))
         lines = [page for i, page in enumerate(lines) if i not in check.duplicates]
     book = build_book(lines)
-    title = outputs.text_pdf.stem
+    title = next(p for p in (outputs.epub, outputs.markdown, outputs.text_pdf) if p).stem
 
     if outputs.markdown:
         written = save_markdown(outputs.markdown, to_markdown(book, title), force)
         log.info("=> %s", written)
         if written != outputs.markdown:
             book, title = _edited_book(outputs.markdown, written, book, title)
-    n = to_pdf(book, title, outputs.text_pdf)
-    log.info("=> %s (%d trang, từ %d trang chụp)", outputs.text_pdf, n, len(pages))
     if outputs.epub:
         from snap2book.epub import to_epub
 
         chapters = to_epub(book, title, outputs.epub)
-        log.info("=> %s (%d chương)", outputs.epub, chapters)
+        log.info("=> %s (%d chương, từ %d trang chụp)", outputs.epub, chapters, len(pages))
+    if outputs.text_pdf:
+        n = to_pdf(book, title, outputs.text_pdf)
+        log.info("=> %s (%d trang)", outputs.text_pdf, n)
     return outputs
 
 
@@ -152,7 +159,7 @@ def _edited_book(md: Path, ocr_md: Path, book: "Book", title: str) -> tuple["Boo
     try:
         edited, edited_title = from_markdown(md.read_text(encoding="utf-8"))
     except ValueError as e:
-        log.warning("  cảnh báo: không đọc được %s (%s); PDF chữ dàn từ bản OCR mới.", md, e)
+        log.warning("  cảnh báo: không đọc được %s (%s); sách dựng từ bản OCR mới.", md, e)
         return book, title
-    log.warning("  PDF chữ được dàn từ bản đã sửa %s.", md)
+    log.warning("  Sách được dựng từ bản đã sửa %s.", md)
     return edited, edited_title or title

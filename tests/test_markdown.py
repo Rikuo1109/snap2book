@@ -61,8 +61,13 @@ def test_cli_typeset_markdown(tmp_path):
     md = tmp_path / "sach.md"
     md.write_text(to_markdown(BOOK, "Sách"), encoding="utf-8")
 
-    main(["typeset", str(md), "-q"])
+    main(["typeset", str(md), "-q"])  # mặc định chỉ EPUB
+    assert not (tmp_path / "sach.pdf").exists()
+    with pymupdf.open(tmp_path / "sach.epub") as doc:
+        text = "".join(p.get_text() for p in doc).replace("\xa0", " ")
+    assert "Sotori" in text and "Chú thích ba." in text
 
+    main(["typeset", str(md), "-q", "--pdf"])
     with pymupdf.open(tmp_path / "sach.pdf") as doc:
         assert doc.metadata["title"] == "Sách"
         text = "".join(p.get_text() for p in doc).replace("\xa0", " ")

@@ -3,7 +3,8 @@
 #   make run IN=resources/sach.pdf   xử lý một file / thư mục cụ thể (OUT=thư mục ra)
 #   make scan                        chỉ xuất bản ảnh đã làm sạch, không OCR
 #   make debug                       lưu thêm ảnh đánh dấu vùng cắt vào output/debug/
-#   make typeset MD=output/sach.md   dàn lại PDF từ file .md đã sửa (ghi đè output/sach.pdf)
+#   make typeset MD=output/sach.md   dựng lại sách (EPUB) từ file .md đã sửa
+#   PDF=1                            xuất thêm PDF chữ khổ A5 (mặc định chỉ EPUB), vd. make icloud PDF=1
 #   make FORCE=1                     ghi đè cả file .md đã sửa tay (mặc định giữ, bản mới ra .ocr.md)
 #   make books                       như make, rồi thêm PDF vào app Sách trên Mac
 #   make icloud                      đọc bản quét từ iCloud Drive/snap2book/Bản quét (tự tạo nếu chưa có),
@@ -21,7 +22,7 @@ ICLOUD_SCANS := $(HOME)/Library/Mobile Documents/com~apple~CloudDocs/snap2book/B
 VENV := .venv
 BIN := $(VENV)/bin
 DELIVER := $(if $(BOOKS),--to-books) $(if $(ICLOUD),--to-icloud)
-CLI := $(BIN)/snap2book -o "$(OUT)" $(if $(FORCE),--force) $(DELIVER)
+CLI := $(BIN)/snap2book -o "$(OUT)" $(if $(FORCE),--force) $(if $(PDF),--pdf) $(DELIVER)
 
 .PHONY: all run books icloud scan debug typeset setup test lint format clean distclean
 
@@ -53,7 +54,7 @@ debug: setup
 
 typeset: setup
 	@test -n "$(MD)" || { echo 'Cần chỉ file: make typeset MD=output/<tên>.md'; exit 1; }
-	$(BIN)/snap2book typeset "$(MD)" $(DELIVER)
+	$(BIN)/snap2book typeset "$(MD)" $(if $(PDF),--pdf) $(DELIVER)
 
 test: setup
 	$(BIN)/pytest -q
