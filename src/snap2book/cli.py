@@ -1,4 +1,4 @@
-"""Dòng lệnh: snap2book <file hoặc thư mục> [-o thư_mục_ra] [--scan-only] [--debug]
+"""Dòng lệnh: snap2book <file hoặc thư mục> [-o thư_mục_ra] [--scan-only] [--no-dewarp] [--debug]
 
 Mỗi file PDF đầu vào (vd. PDF từ app scan của iPhone) là một cuốn sách; các ảnh rời
 .jpg/.png trong cùng thư mục (sắp theo tên) gộp thành một cuốn.
@@ -29,6 +29,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "-o", "--out-dir", type=Path, default=Path("output"), help="thư mục ra (mặc định: output)"
     )
     ap.add_argument("--scan-only", action="store_true", help="không OCR, chỉ xuất PDF ảnh đã làm sạch")
+    ap.add_argument("--no-dewarp", action="store_true", help="không làm phẳng trang cong")
     ap.add_argument("--debug", action="store_true", help="lưu ảnh đánh dấu vùng cắt vào <thư mục ra>/debug")
     ap.add_argument("-q", "--quiet", action="store_true", help="chỉ in lỗi")
     ap.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
@@ -53,7 +54,7 @@ def main(argv: list[str] | None = None) -> None:
         if args.scan_only:
             outputs.text_pdf = outputs.markdown = None
         debug_dir = args.out_dir / "debug" / name if args.debug else None
-        convert(inputs, outputs, debug_dir)
+        convert(inputs, outputs, debug_dir, flatten=not args.no_dewarp)
 
 
 if __name__ == "__main__":

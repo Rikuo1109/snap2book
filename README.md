@@ -29,7 +29,7 @@ make debug                             # lưu thêm ảnh đánh dấu vùng c�
 Hoặc gọi trực tiếp sau khi cài (`make setup` hoặc `pip install -e .`):
 
 ```bash
-snap2book resources/ -o output [--scan-only] [--debug] [-q]
+snap2book resources/ -o output [--scan-only] [--no-dewarp] [--debug] [-q]
 ```
 
 Mỗi file PDF đầu vào là một cuốn; các ảnh rời `.jpg/.png/...` trong cùng thư mục, sắp theo tên,
@@ -51,8 +51,9 @@ sources ─► cleanup ─► scan_pdf                      (<tên> - scan.pdf)
 |---|---|
 | `sources.py` | Đọc ảnh từ PDF/ảnh rời, gom đầu vào thành từng cuốn |
 | `cleanup.py` | Làm phẳng ánh sáng, xoay thẳng, tìm trang chính, bỏ trang bên cạnh / ngón tay / khăn bàn, cắt sát vùng chữ |
+| `dewarp.py` | Làm phẳng trang cong gần gáy sách: ước lượng độ võng từ các dòng chữ rồi kéo thẳng |
 | `scan_pdf.py` | Ghép ảnh đã làm sạch thành PDF ảnh cùng khổ |
-| `ocr.py` | OCR tiếng Việt bằng Apple Vision, xử lý chữ hoa lớn đầu chương (drop cap) |
+| `ocr.py` | OCR tiếng Việt bằng Apple Vision, xử lý chữ hoa lớn đầu chương (drop cap), gộp mảnh dòng bị tách |
 | `structure.py` | Bỏ header/footer, nhận tiêu đề chương, tách chú thích, nối đoạn qua các trang |
 | `markdown.py` | Xuất Markdown (chú thích dạng `[^1]`) |
 | `typeset.py` | Dàn trang PDF: chú thích ở chân trang có số mũ, chống dòng mồ côi |
@@ -68,7 +69,7 @@ make format     # ruff tự sửa và định dạng
 
 ## Hạn chế
 
-- Trang chụp cong nhiều (gần gáy sách) chỉ được xoay thẳng, chưa làm phẳng, nên OCR ở vùng đó
-  dễ sai dấu. Nên đọc soát file `.md`.
+- Trang cong được kéo thẳng theo chiều dọc, nhưng chữ bị co ngang gần gáy sách thì chưa sửa;
+  OCR vẫn còn sai dấu lẻ tẻ, nên đọc soát file `.md`.
 - Số mũ chú thích đôi khi bị OCR đọc thành dấu nháy; script nhận dạng được trường hợp này,
   các dạng lỗi khác thì chưa.

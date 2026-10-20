@@ -27,9 +27,11 @@ def output_paths(out_dir: Path, name: str) -> Outputs:
     )
 
 
-def convert(inputs: Sequence[Path], outputs: Outputs, debug_dir: Path | None = None) -> Outputs:
+def convert(
+    inputs: Sequence[Path], outputs: Outputs, debug_dir: Path | None = None, flatten: bool = True
+) -> Outputs:
     """Xử lý các file đầu vào (theo thứ tự trang) thành một cuốn sách.
-    outputs.text_pdf = None thì bỏ qua OCR, chỉ xuất PDF ảnh."""
+    outputs.text_pdf = None thì bỏ qua OCR, chỉ xuất PDF ảnh. flatten: làm phẳng trang cong."""
     if debug_dir:
         debug_dir.mkdir(parents=True, exist_ok=True)
 
@@ -38,9 +40,12 @@ def convert(inputs: Sequence[Path], outputs: Outputs, debug_dir: Path | None = N
         for gray in load_images(src):
             idx = len(pages) + 1
             debug_path = debug_dir / f"page_{idx:03d}.jpg" if debug_dir else None
-            page = clean_page(gray, debug_path)
+            page = clean_page(gray, debug_path, flatten)
             pages.append(page.image)
-            log.info("  trang %d: xoay %+.1f°, vùng chữ %dx%d", idx, page.angle, *page.image.shape[::-1])
+            flat = f", làm phẳng (võng {page.curve:.0f}px)" if page.flattened else ""
+            log.info(
+                "  trang %d: xoay %+.1f°%s, vùng chữ %dx%d", idx, page.angle, flat, *page.image.shape[::-1]
+            )
     if not pages:
         raise ValueError("Không có trang nào.")
 

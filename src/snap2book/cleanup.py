@@ -4,6 +4,7 @@
 2. Xoay thẳng dòng chữ (deskew).
 3. Tìm trang chính trong ảnh, bỏ phần trang bên cạnh, ngón tay, khăn bàn, bóng gáy sách.
 4. Cắt sát vùng chữ, mọi thứ ngoài vùng chữ thành trắng.
+5. Làm phẳng trang cong (xem dewarp.py).
 """
 
 from dataclasses import dataclass
@@ -11,6 +12,8 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+
+from snap2book.dewarp import dewarp
 
 INK_THRESHOLD = 150  # sau khi làm phẳng ánh sáng, điểm tối hơn mức này là mực
 MAX_SKEW_DEG = 6.0
@@ -20,6 +23,8 @@ MAX_SKEW_DEG = 6.0
 class CleanedPage:
     image: np.ndarray  # ảnh xám đã cắt sát vùng chữ, nền trắng
     angle: float  # góc đã xoay (độ)
+    curve: float = 0.0  # độ võng dòng chữ trước khi làm phẳng (px)
+    flattened: bool = False  # đã làm phẳng hay chưa (trang gần như phẳng thì giữ nguyên)
 
 
 def flatten_illumination(gray: np.ndarray) -> np.ndarray:
@@ -137,8 +142,9 @@ def enhance(norm: np.ndarray) -> np.ndarray:
     return cv2.LUT(norm, lut)
 
 
-def clean_page(gray: np.ndarray, debug_path: Path | None = None) -> CleanedPage:
-    """Làm sạch một ảnh chụp. debug_path: lưu ảnh đánh dấu mực (đỏ) và vùng cắt (xanh)."""
+def clean_page(gray: np.ndarray, debug_path: Path | None = None, flatten: bool = True) -> CleanedPage:
+    """Làm sạch một ảnh chụp. debug_path: lưu ảnh đánh dấu mực (đỏ) và vùng cắt (xanh).
+    flatten: làm phẳng trang cong."""
     norm = flatten_illumination(gray)
     angle = find_skew(ink_mask(norm))
     norm = rotate(norm, angle, 255)
@@ -149,11 +155,17 @@ def clean_page(gray: np.ndarray, debug_path: Path | None = None) -> CleanedPage:
     x0, y0, x1, y1 = max(0, x0 - p), max(0, y0 - p), min(w, x1 + p), min(h, y1 + p)
     # ngoài các khối chữ đã chọn -> trắng (xoá khăn bàn, mẩu trang bên cạnh lọt vào khung)
     region = cv2.dilate(region, np.ones((p, p), np.uint8))
-    page = np.where(region > 0, enhance(norm), 255).astype(np.uint8)
+    page = np.where(region > 0, norm, 255).astype(np.uint8)
 
     if debug_path:
         dbg = cv2.cvtColor(norm, cv2.COLOR_GRAY2BGR)
         dbg[mask > 0] = (0, 0, 255)
         cv2.rectangle(dbg, (x0, y0), (x1, y1), (0, 200, 0), 8)
         cv2.imwrite(str(debug_path), cv2.resize(dbg, None, fx=0.35, fy=0.35))
-    return CleanedPage(page[y0:y1, x0:x1], angle)
+    crop = page[y0:y1, x0:x1]
+    if not flatten:
+        return CleanedPage(enhance(crop), angle)
+    # làm phẳng trên ảnh xám rồi mới tăng tương phản: nội suy trên ảnh đã gần đen-trắng
+    # làm răng cưa nét dấu nhỏ, OCR đọc sai dấu
+    flat, curve = dewarp(crop)
+    return CleanedPage(enhance(flat), angle, curve, flattened=flat is not crop)
