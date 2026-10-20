@@ -61,7 +61,7 @@ def send_to_books(pdf: Path, run: Runner = subprocess.run) -> bool:
 
     state[pdf.name] = mark
     state_path.write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    log.info("=> đã thêm %s vào Sách (đồng bộ sang iPhone qua iCloud)", pdf.name)
+    log.info("=> đã thêm %s vào Sách trên Mac (sang iPhone nếu Sách bật iCloud Drive)", pdf.name)
     if previous is not None:
         log.warning("  Sách: bản cũ của %s vẫn còn trong Sách, xoá tay nếu không cần", pdf.name)
     return True
