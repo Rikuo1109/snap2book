@@ -69,19 +69,33 @@ def check_pages(read: Sequence[int | None], line_counts: Sequence[int]) -> PageC
     by_number: dict[int, list[int]] = {}
     for i in known:
         by_number.setdefault(nums[i], []).append(i)  # type: ignore[arg-type]
-    for n, photos in sorted(by_number.items()):
-        if len(photos) < 2:
-            continue
+    groups = {n: photos for n, photos in sorted(by_number.items()) if len(photos) > 1}
+
+    def best(photos: list[int]) -> int:
+        return max(photos, key=lambda i: (line_counts[i], -i))  # nhiều dòng hơn; hoà thì ảnh trước
+
+    adjacent = {n for n, photos in groups.items() if photos[-1] - photos[0] == len(photos) - 1}
+    # chụp lặp không liền nhau, thường gặp khi quét tiếp: chụp lại vài trang cuối của lần trước
+    # (..., 12, 13 | 12, 13, 14, ...). Chỉ tự bỏ khi bỏ xong thì các ảnh còn lại đúng thứ tự trang;
+    # còn lại là ảnh bị xáo trộn thật, để người dùng tự xếp.
+    apart = [n for n in groups if n not in adjacent]
+    drop_apart = [i for n in apart for i in groups[n] if i != best(groups[n])]
+    drop_adjacent = [i for n in adjacent for i in groups[n] if i != best(groups[n])]
+    kept = [i for i in known if i not in drop_apart and i not in drop_adjacent]
+    apart_ok = all(nums[p] < nums[i] for p, i in pairwise(kept))  # type: ignore[operator]
+
+    for n, photos in groups.items():
         names = ", ".join(str(i + 1) for i in photos[:-1]) + f" và {photos[-1] + 1}"
         msg = f"trang {n} chụp {len(photos)} lần: ảnh {names}"
-        if photos[-1] - photos[0] == len(photos) - 1:  # liền nhau: chắc là chụp lặp
-            keep = max(photos, key=lambda i: (line_counts[i], -i))
+        if n in adjacent or apart_ok:
+            keep = best(photos)
             check.duplicates += [i for i in photos if i != keep]
             msg += f" (giữ ảnh {keep + 1})"
         else:
             msg += " (không liền nhau, không tự bỏ)"
         warn(msg)
     check.duplicates.sort()
+    known = [i for i in known if i not in check.duplicates]  # thứ tự / chỗ thiếu: xét ảnh được giữ
 
     for p, i in pairwise(known):
         a, b = nums[p], nums[i]

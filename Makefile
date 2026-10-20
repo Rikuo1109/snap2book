@@ -6,7 +6,8 @@
 #   make typeset MD=output/sach.md   dàn lại PDF từ file .md đã sửa (ghi đè output/sach.pdf)
 #   make FORCE=1                     ghi đè cả file .md đã sửa tay (mặc định giữ, bản mới ra .ocr.md)
 #   make books                       như make, rồi thêm PDF vào app Sách trên Mac
-#   make icloud                      như make, rồi chép PDF vào iCloud Drive/snap2book/Sách đã xử lý
+#   make icloud                      đọc bản quét từ iCloud Drive/snap2book/Bản quét (tự tạo nếu chưa có),
+#                                    chép PDF kết quả vào iCloud Drive/snap2book/Sách đã xử lý
 #                                    BOOKS=1 / ICLOUD=1 làm điều tương tự cho mọi lệnh,
 #                                    vd. make typeset MD=output/sach.md ICLOUD=1
 #   make test | lint | format        kiểm thử, kiểm tra / định dạng code
@@ -16,6 +17,7 @@ IN ?= resources
 OUT ?= output
 # OCR (pyobjc) cần Python >= 3.10; mặc định lấy bản 3.12 của pyenv nếu có
 PYTHON ?= $(firstword $(wildcard $(HOME)/.pyenv/versions/3.12*/bin/python) python3)
+ICLOUD_SCANS := $(HOME)/Library/Mobile Documents/com~apple~CloudDocs/snap2book/Bản quét
 VENV := .venv
 BIN := $(VENV)/bin
 DELIVER := $(if $(BOOKS),--to-books) $(if $(ICLOUD),--to-icloud)
@@ -40,7 +42,8 @@ books: setup
 	$(CLI) "$(IN)" --to-books
 
 icloud: setup
-	$(CLI) "$(IN)" --to-icloud
+	@mkdir -p "$(ICLOUD_SCANS)"
+	$(CLI) "$(ICLOUD_SCANS)" --to-icloud
 
 scan: setup
 	$(CLI) "$(IN)" --scan-only
