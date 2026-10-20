@@ -1,5 +1,6 @@
 """Đọc ảnh đầu vào: PDF từ app scan (mỗi trang một ảnh) hoặc file ảnh rời."""
 
+import unicodedata
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -37,14 +38,20 @@ def find_jobs(src: Path) -> list[tuple[str, list[Path]]]:
     """Gom đầu vào thành các cuốn sách: (tên, danh sách file).
 
     Mỗi file PDF là một cuốn; các ảnh rời trong cùng thư mục (sắp theo tên) là một cuốn.
+    Tên chuẩn hoá NFC: macOS lưu tên file tiếng Việt dạng tách dấu (NFD), để nguyên thì
+    tiêu đề trong PDF/Markdown trông giống nhưng không khớp khi tìm kiếm, so sánh.
     """
     if not src.exists():
         raise FileNotFoundError(src)
     if not src.is_dir():
-        return [(src.stem, [src])]
+        return [(_nfc(src.stem), [src])]
     files = sorted(src.iterdir())
-    jobs = [(p.stem, [p]) for p in files if p.suffix.lower() == ".pdf"]
+    jobs = [(_nfc(p.stem), [p]) for p in files if p.suffix.lower() == ".pdf"]
     images = [p for p in files if p.suffix.lower() in IMAGE_EXTS]
     if images:
-        jobs.append((src.name, images))
+        jobs.append((_nfc(src.name), images))
     return jobs
+
+
+def _nfc(name: str) -> str:
+    return unicodedata.normalize("NFC", name)
