@@ -1,12 +1,14 @@
 """Chạy toàn bộ quy trình cho một cuốn sách: làm sạch -> PDF ảnh -> OCR -> Markdown + PDF chữ."""
 
 import logging
-from collections.abc import Sequence
+import os
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from snap2book.cleanup import clean_page
+from snap2book.cache import PageCache
+from snap2book.pages import PageTask, Settings, process_pages
 from snap2book.scan_pdf import write_scan_pdf
 from snap2book.sources import load_images
 
@@ -38,48 +40,64 @@ def convert(
     drop_duplicates: bool = True,
     flatten: bool = True,
     spellfix: bool = True,
+    jobs: int | None = None,
+    cache_dir: Path | None = None,
     force: bool = False,
 ) -> Outputs:
     """Xử lý các file đầu vào (theo thứ tự trang) thành một cuốn sách.
     outputs.text_pdf = None thì bỏ qua OCR, chỉ xuất PDF ảnh.
     drop_duplicates: bỏ nội dung ảnh chụp lặp một trang (theo số trang in).
     flatten: làm phẳng trang cong. spellfix: sửa lỗi dấu theo từ điển chính tả.
+    jobs: số tiến trình xử lý trang song song (mặc định: số nhân CPU).
+    cache_dir: thư mục cache kết quả từng trang (None: không dùng cache).
     force: ghi đè cả file .md đã sửa tay (mặc định giữ lại, bản OCR mới ghi ra <tên>.ocr.md)."""
     if debug_dir:
         debug_dir.mkdir(parents=True, exist_ok=True)
 
-    pages = []
-    unflattened = []  # ảnh trước khi làm phẳng, dùng làm phương án OCR phụ
-    for src in inputs:
-        for gray in load_images(src):
-            idx = len(pages) + 1
-            debug_path = debug_dir / f"page_{idx:03d}.jpg" if debug_dir else None
-            page = clean_page(gray, debug_path, flatten)
-            pages.append(page.image)
-            unflattened.append(page.unflattened)
-            flat = f", làm phẳng (võng {page.curve:.0f}px)" if page.flattened else ""
-            log.info(
-                "  trang %d: xoay %+.1f°%s, vùng chữ %dx%d", idx, page.angle, flat, *page.image.shape[::-1]
-            )
+    def tasks() -> Iterator[PageTask]:
+        idx = 0
+        for src in inputs:
+            for gray in load_images(src):
+                idx += 1
+                yield PageTask(gray, debug_dir / f"page_{idx:03d}.jpg" if debug_dir else None)
+
+    do_ocr = outputs.text_pdf is not None
+    settings = Settings(flatten, do_ocr, with_alt=spellfix, cache_dir=cache_dir)
+
+    pages, lines, hits = [], [], 0
+    for idx, page in enumerate(process_pages(tasks(), settings, jobs or os.cpu_count() or 1), 1):
+        pages.append(page.image)
+        hits += page.cached
+        flat = f", làm phẳng (võng {page.curve:.0f}px)" if page.flattened else ""
+        ocr = ""
+        if page.lines is not None:
+            lines.append(page.lines)
+            ocr = f", OCR {len(page.lines)} dòng"
+        log.info(
+            "  trang %d: xoay %+.1f°%s, vùng chữ %dx%d%s%s",
+            idx,
+            page.angle,
+            flat,
+            *page.image.shape[::-1],
+            ocr,
+            " (cache)" if page.cached else "",
+        )
     if not pages:
         raise ValueError("Không có trang nào.")
+    if cache_dir:
+        log.info("  cache: %d/%d trang không phải tính lại", hits, len(pages))
+        PageCache(cache_dir).prune()
 
     write_scan_pdf(pages, outputs.scan_pdf)
     log.info("=> %s (%d trang ảnh)", outputs.scan_pdf, len(pages))
-    if outputs.text_pdf is None:
+    if not do_ocr:
         return outputs
 
     # import muộn: OCR cần macOS (Apple Vision), chế độ chỉ-ảnh thì không cần
     from snap2book.markdown import save_markdown, to_markdown
-    from snap2book.ocr import ocr_page
     from snap2book.pagecheck import check_pages
     from snap2book.structure import build_book, page_number
     from snap2book.typeset import to_pdf
-
-    lines = []
-    for idx, (img, alt) in enumerate(zip(pages, unflattened, strict=True), 1):
-        lines.append(ocr_page(img, alt if spellfix else None))
-        log.info("  OCR trang %d: %d dòng", idx, len(lines[-1]))
 
     if spellfix:
         from snap2book.spellfix import MacSpellChecker, fix_pages

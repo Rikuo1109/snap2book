@@ -6,7 +6,7 @@
 #   make typeset MD=output/sach.md   dàn lại PDF từ file .md đã sửa (ghi đè output/sach.pdf)
 #   make FORCE=1                     ghi đè cả file .md đã sửa tay (mặc định giữ, bản mới ra .ocr.md)
 #   make test | lint | format        kiểm thử, kiểm tra / định dạng code
-#   make clean                       xoá output/        make distclean   xoá cả .venv/
+#   make clean                       xoá output/ (cả cache output/.cache/)   make distclean   xoá cả .venv/
 
 IN ?= resources
 OUT ?= output
