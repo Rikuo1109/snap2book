@@ -1,7 +1,8 @@
 """Dòng lệnh:
   snap2book <file hoặc thư mục> [-o thư_mục_ra] [-j số_tiến_trình] [--no-cache] [--scan-only]
-            [--no-dewarp] [--no-spellfix] [--debug] [--force] [--to-books]
-  snap2book typeset <file .md> [-o file.pdf] [--to-books]     dàn trang lại từ Markdown đã sửa
+            [--no-dewarp] [--no-spellfix] [--debug] [--force] [--to-books] [--to-icloud [thư_mục]]
+  snap2book typeset <file .md> [-o file.pdf] [--to-books] [--to-icloud [thư_mục]]
+                                                    dàn trang lại từ Markdown đã sửa
 
 Mỗi file PDF đầu vào (vd. PDF từ app scan của iPhone) là một cuốn sách; các ảnh rời
 .jpg/.png trong cùng thư mục (sắp theo tên) gộp thành một cuốn.
@@ -18,8 +19,11 @@ Sau khi soát/sửa lỗi OCR trong <tên>.md, chạy "snap2book typeset <tên>.
 <tên>.pdf (mặc định ghi cạnh file .md). Chạy lại snap2book sẽ không ghi đè <tên>.md đã
 sửa: bản OCR mới ghi ra <tên>.ocr.md và <tên>.pdf dàn từ bản đã sửa (--force để ghi đè).
 
---to-books thêm <tên>.pdf vào app Sách (Apple Books), Sách tự đồng bộ sang iPhone qua iCloud.
-Chỉ thêm khi nội dung PDF đổi so với lần thêm trước, để không sinh bản trùng.
+--to-books thêm <tên>.pdf vào app Sách (Apple Books) trên Mac; Sách đồng bộ sang iPhone nếu
+đã bật iCloud Drive cho Sách. Chỉ thêm khi nội dung PDF đổi, để không sinh bản trùng.
+
+--to-icloud chép <tên>.pdf vào iCloud Drive (mặc định snap2book/Sách đã xử lý); trên iPhone mở
+bằng app Tệp, hoặc Chia sẻ → Sách. Không phụ thuộc vào đồng bộ của app Sách.
 """
 
 import argparse
@@ -74,11 +78,33 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def _add_to_books(ap: argparse.ArgumentParser) -> None:
+    from snap2book.icloud import DEFAULT_DIR
+
     ap.add_argument(
         "--to-books",
         action="store_true",
-        help="thêm PDF vào app Sách (đồng bộ sang iPhone qua iCloud); chỉ thêm khi nội dung đổi",
+        help="thêm PDF vào app Sách trên Mac (sang iPhone nếu Sách bật iCloud Drive), không thêm trùng",
     )
+    ap.add_argument(
+        "--to-icloud",
+        nargs="?",
+        const=DEFAULT_DIR,
+        type=Path,
+        metavar="THƯ_MỤC",
+        help=f"chép PDF vào iCloud Drive để mở trên iPhone (mặc định: {DEFAULT_DIR.name} trong snap2book)",
+    )
+
+
+def _deliver(pdf: Path, args: argparse.Namespace) -> None:
+    """Gửi pdf tới app Sách và/hoặc iCloud Drive theo cờ dòng lệnh."""
+    if args.to_books:
+        from snap2book.books import send_to_books
+
+        send_to_books(pdf)
+    if args.to_icloud:
+        from snap2book.icloud import copy_to_icloud
+
+        copy_to_icloud(pdf, args.to_icloud)
 
 
 def _positive_int(text: str) -> int:
@@ -114,10 +140,7 @@ def typeset(args: argparse.Namespace) -> None:
     out = args.output or args.markdown.with_suffix(".pdf")
     n = to_pdf(book, title or args.markdown.stem, out)
     logging.info("=> %s (%d trang)", out, n)
-    if args.to_books:
-        from snap2book.books import send_to_books
-
-        send_to_books(out)
+    _deliver(out, args)
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -157,10 +180,7 @@ def main(argv: list[str] | None = None) -> None:
             cache_dir=None if args.no_cache else args.out_dir / ".cache" / name,
             force=args.force,
         )
-        if args.to_books:
-            from snap2book.books import send_to_books
-
-            send_to_books(outputs.text_pdf or outputs.scan_pdf)
+        _deliver(outputs.text_pdf or outputs.scan_pdf, args)
 
 
 if __name__ == "__main__":

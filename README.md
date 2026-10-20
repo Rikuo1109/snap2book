@@ -26,14 +26,15 @@ make scan                              # chỉ xuất bản ảnh đã làm sạ
 make debug                             # lưu thêm ảnh đánh dấu vùng cắt vào output/debug/
 make typeset MD=output/sach.md         # dàn lại sach.pdf từ file .md đã sửa
 make FORCE=1                           # ghi đè cả file .md đã sửa tay
-make books                             # như make, rồi thêm PDF vào app Sách (đồng bộ sang iPhone)
+make icloud                            # như make, rồi chép PDF vào iCloud Drive để mở trên iPhone
+make books                             # như make, rồi thêm PDF vào app Sách trên Mac
 ```
 
 Hoặc gọi trực tiếp sau khi cài (`make setup` hoặc `pip install -e .`):
 
 ```bash
-snap2book resources/ -o output [-j N] [--no-cache] [--scan-only] [--no-dewarp] [--no-spellfix] [--debug] [-v] [--keep-duplicates] [--force] [--to-books] [-q]
-snap2book typeset output/sach.md [-o sach.pdf] [--to-books] [-q]
+snap2book resources/ -o output [-j N] [--no-cache] [--scan-only] [--no-dewarp] [--no-spellfix] [--debug] [-v] [--keep-duplicates] [--force] [--to-books] [--to-icloud [THƯ_MỤC]] [-q]
+snap2book typeset output/sach.md [-o sach.pdf] [--to-books] [--to-icloud [THƯ_MỤC]] [-q]
 ```
 
 Mỗi file PDF đầu vào là một cuốn; các ảnh rời `.jpg/.png/...` trong cùng thư mục, sắp theo tên,
@@ -83,19 +84,32 @@ báo và dàn `<tên>.pdf` từ bản đã sửa (`<tên> - scan.pdf` vẫn đư
 mã băm (xuất từ bản cũ) cũng được giữ lại cho chắc. Muốn ghi đè bằng bản OCR mới: thêm `--force`
 (`make run IN=... FORCE=1`).
 
-### Đọc trên iPhone (app Sách)
+### Đọc trên iPhone
 
-`--to-books` (hoặc `make books`, hay thêm `BOOKS=1` vào lệnh make bất kỳ, vd.
-`make typeset MD=output/sach.md BOOKS=1`) thêm `<tên>.pdf` vào app Sách trên Mac; Sách tự đồng bộ
-sang iPhone/iPad. Cần bật một lần:
+**Cách chắc chắn: iCloud Drive.** `--to-icloud` (hoặc `make icloud`, hay thêm `ICLOUD=1` vào lệnh
+make bất kỳ, vd. `make typeset MD=output/sach.md ICLOUD=1`) chép `<tên>.pdf` vào
+`iCloud Drive/snap2book/Sách đã xử lý/` (đổi bằng `--to-icloud <thư mục>`). Trên iPhone: app **Tệp**
+→ iCloud Drive → snap2book → Sách đã xử lý; muốn cho vào app Sách thì bấm Chia sẻ → **Sách** ngay
+trên iPhone. Chép đè theo tên file nên chạy lại không sinh bản trùng.
 
-- Mac: app Sách → Cài đặt → Cài đặt chung → "Đồng bộ bộ sưu tập, dấu trang và nội dung tô sáng giữa
-  các thiết bị".
-- iPhone: Cài đặt → [tên bạn] → iCloud → bật **Sách** (và iCloud Drive).
+Kết hợp với quét sách từ iPhone: trong app Tệp, vào thư mục `snap2book` trên iCloud Drive, bấm
+"…" → **Quét tài liệu**. Trên Mac, trỏ một link vào thư mục đó rồi chạy:
 
-Sách không nhận ra hai file là cùng một cuốn, nên script chỉ thêm khi nội dung PDF đổi so với lần
-thêm trước (ghi nhớ trong `output/.books.json`). Khi đã sửa `.md` và dàn lại, bản mới được thêm
-nhưng bản cũ vẫn còn trong Sách: xoá tay bản cũ.
+```bash
+ln -s "$HOME/Library/Mobile Documents/com~apple~CloudDocs/snap2book" resources/icloud
+make icloud IN=resources/icloud
+```
+
+(Thư mục con `Sách đã xử lý` không bị coi là đầu vào: chỉ đọc file nằm trực tiếp trong thư mục.)
+macOS chặn ứng dụng chưa được cấp quyền đọc/ghi iCloud Drive: chạy trong Terminal (lần đầu bấm Cho
+phép), hoặc cấp quyền ở Cài đặt hệ thống → Quyền riêng tư & Bảo mật → Tệp và thư mục.
+
+**App Sách trên Mac.** `--to-books` (hoặc `make books`, `BOOKS=1`) thêm `<tên>.pdf` vào app Sách
+trên Mac. Sách chỉ đồng bộ PDF sang iPhone khi bật iCloud Drive cho Sách ở cả hai máy (Mac: Cài đặt
+hệ thống → [tên bạn] → iCloud → iCloud Drive → Sách; iPhone: Cài đặt → Ứng dụng → Sách → iCloud
+Drive), và kể cả khi đã bật, việc đồng bộ có thể không chạy, nên ưu tiên `--to-icloud`. Sách không
+nhận ra hai file là cùng một cuốn, nên script chỉ thêm khi nội dung PDF đổi so với lần thêm trước
+(ghi nhớ trong `output/.books.json`); bản cũ trong Sách phải xoá tay.
 
 **Mẹo chụp:** đưa trang cần chụp vào giữa khung hình. Khi ảnh có hai trang, script chọn trang
 nằm gần giữa nhất.
@@ -125,6 +139,7 @@ từ `spellfix` trở đi chạy trên cả cuốn.
 | `markdown.py` | Xuất Markdown (chú thích dạng `[^1]`) và đọc ngược lại để dàn trang bản đã sửa |
 | `typeset.py` | Dàn trang PDF: chú thích ở chân trang có số mũ, chống dòng mồ côi |
 | `books.py` | Thêm PDF vào app Sách (Apple Books), bỏ qua nếu nội dung không đổi |
+| `icloud.py` | Chép PDF vào iCloud Drive để mở trên iPhone |
 | `pages.py` | Làm sạch + OCR từng trang song song nhiều tiến trình, giữ đúng thứ tự trang |
 | `cache.py` | Cache ảnh đã làm sạch và dòng OCR của từng trang trong `output/.cache/` |
 | `pipeline.py`, `cli.py` | Điều phối các bước, dòng lệnh |
