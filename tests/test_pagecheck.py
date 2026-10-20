@@ -79,3 +79,20 @@ def test_unknown_photos_cover_gap():
 def test_out_of_order():
     check = check_pages([10, 12, 11, 13], [10] * 4)
     assert check.warnings == ["ảnh 3 (trang 11) nằm sau ảnh 2 (trang 12): sai thứ tự"]
+
+
+def test_rescanned_overlap_when_continuing_is_dropped():
+    # quét tiếp: chụp lại trang 12, 13 của lần trước rồi mới sang 14
+    check = check_pages([10, 11, 12, 13, 12, 13, 14, 15], [30, 30, 30, 29, 30, 30, 30, 30])
+    assert check.duplicates == [3, 4]  # giữ bản nhiều dòng hơn của mỗi trang
+    assert check.warnings == [
+        "trang 12 chụp 2 lần: ảnh 3 và 5 (giữ ảnh 3)",
+        "trang 13 chụp 2 lần: ảnh 4 và 6 (giữ ảnh 6)",
+    ]
+
+
+def test_shuffled_duplicates_are_left_to_the_user():
+    # bỏ bản nào cũng không ra đúng thứ tự: chỉ cảnh báo
+    check = check_pages([10, 12, 11, 12, 13], [10] * 5)
+    assert check.duplicates == []
+    assert "trang 12 chụp 2 lần: ảnh 2 và 4 (không liền nhau, không tự bỏ)" in check.warnings
