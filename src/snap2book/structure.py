@@ -73,6 +73,14 @@ def _is_noise(text: str) -> bool:
     return sum(c.isalpha() for c in text) < 2 and not re.fullmatch(r"[\W\d]*[.!?…\"”]", text)
 
 
+def _fix_open_quote(text: str) -> str:
+    """Ngoặc kép mở đầu lời thoại hay bị OCR đọc thành nháy đơn: 'Đương nhiên..." -> "Đương nhiên..."
+    Chỉ sửa khi nháy đơn đứng đầu đoạn và ngay sau là chữ hoa."""
+    if text[:1] == "'" and text[1:2].isupper():
+        return '"' + text[1:]
+    return text
+
+
 class _Builder:
     def __init__(self) -> None:
         self.book = Book()
@@ -80,7 +88,8 @@ class _Builder:
 
     def end_paragraph(self) -> None:
         if self.para:
-            self.book.blocks.append(Block("p", re.sub(r"\s+", " ", self.para).strip()))
+            text = re.sub(r"\s+", " ", self.para).strip()
+            self.book.blocks.append(Block("p", _fix_open_quote(text)))
         self.para = None
 
     def add_line(self, text: str, starts_paragraph: bool) -> None:

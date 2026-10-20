@@ -24,16 +24,28 @@ make                                   # lần đầu tự tạo .venv; xử lý
 make run IN=duong/dan/sach.pdf         # một file hoặc thư mục cụ thể; OUT=thư mục ra
 make scan                              # chỉ xuất bản ảnh đã làm sạch, không OCR
 make debug                             # lưu thêm ảnh đánh dấu vùng cắt vào output/debug/
+make typeset MD=output/sach.md         # dàn lại sach.pdf từ file .md đã sửa
 ```
 
 Hoặc gọi trực tiếp sau khi cài (`make setup` hoặc `pip install -e .`):
 
 ```bash
 snap2book resources/ -o output [--scan-only] [--debug] [-q]
+snap2book typeset output/sach.md [-o sach.pdf] [-q]
 ```
 
 Mỗi file PDF đầu vào là một cuốn; các ảnh rời `.jpg/.png/...` trong cùng thư mục, sắp theo tên,
 gộp thành một cuốn.
+
+### Sửa lỗi OCR rồi dàn trang lại
+
+1. Chụp sách, chạy `make` → có `output/<tên>.md` và `output/<tên>.pdf`.
+2. Mở `output/<tên>.md`, đối chiếu với `<tên> - scan.pdf` và sửa lỗi OCR. Giữ đúng dạng:
+   `## ` tiêu đề chương, `### ` tiêu đề phụ, các đoạn cách nhau bằng dòng trống, chú thích
+   ghi `[^n]` trong bài và `[^n]: nội dung` ở cuối file (số thứ tự được đánh lại tự động).
+3. `make typeset MD="output/<tên>.md"` → ghi đè `output/<tên>.pdf` bằng bản đã sửa.
+
+Lưu ý: chạy lại `make` trên cùng cuốn sách sẽ ghi đè file `.md` đã sửa; nên sao chép ra chỗ khác.
 
 **Mẹo chụp:** đưa trang cần chụp vào giữa khung hình. Khi ảnh có hai trang, script chọn trang
 nằm gần giữa nhất.
@@ -43,8 +55,8 @@ nằm gần giữa nhất.
 ```
 sources ─► cleanup ─► scan_pdf                      (<tên> - scan.pdf)
               │
-              └─► ocr ─► structure ─┬─► markdown    (<tên>.md)
-                                    └─► typeset     (<tên>.pdf)
+              └─► ocr ─► structure ─┬─► markdown    (<tên>.md) ─┐ sửa tay
+                                    └─► typeset     (<tên>.pdf) ◄┘ snap2book typeset
 ```
 
 | Module | Việc |
@@ -54,7 +66,7 @@ sources ─► cleanup ─► scan_pdf                      (<tên> - scan.pdf)
 | `scan_pdf.py` | Ghép ảnh đã làm sạch thành PDF ảnh cùng khổ |
 | `ocr.py` | OCR tiếng Việt bằng Apple Vision, xử lý chữ hoa lớn đầu chương (drop cap) |
 | `structure.py` | Bỏ header/footer, nhận tiêu đề chương, tách chú thích, nối đoạn qua các trang |
-| `markdown.py` | Xuất Markdown (chú thích dạng `[^1]`) |
+| `markdown.py` | Xuất Markdown (chú thích dạng `[^1]`) và đọc ngược lại để dàn trang bản đã sửa |
 | `typeset.py` | Dàn trang PDF: chú thích ở chân trang có số mũ, chống dòng mồ côi |
 | `pipeline.py`, `cli.py` | Điều phối các bước, dòng lệnh |
 
@@ -69,6 +81,7 @@ make format     # ruff tự sửa và định dạng
 ## Hạn chế
 
 - Trang chụp cong nhiều (gần gáy sách) chỉ được xoay thẳng, chưa làm phẳng, nên OCR ở vùng đó
-  dễ sai dấu. Nên đọc soát file `.md`.
+  dễ sai dấu. Nên đọc soát file `.md` rồi dàn lại bằng `snap2book typeset`.
 - Số mũ chú thích đôi khi bị OCR đọc thành dấu nháy; script nhận dạng được trường hợp này,
-  các dạng lỗi khác thì chưa.
+  các dạng lỗi khác thì chưa. Tương tự, nháy đơn đầu đoạn ngay trước chữ hoa (`'Đương...`) được
+  sửa thành ngoặc kép.

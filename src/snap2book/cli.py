@@ -1,4 +1,6 @@
-"""Dòng lệnh: snap2book <file hoặc thư mục> [-o thư_mục_ra] [--scan-only] [--debug]
+"""Dòng lệnh:
+  snap2book <file hoặc thư mục> [-o thư_mục_ra] [--scan-only] [--debug]
+  snap2book typeset <file .md> [-o file.pdf]     dàn trang lại từ Markdown đã sửa
 
 Mỗi file PDF đầu vào (vd. PDF từ app scan của iPhone) là một cuốn sách; các ảnh rời
 .jpg/.png trong cùng thư mục (sắp theo tên) gộp thành một cuốn.
@@ -7,6 +9,9 @@ Mỗi file PDF đầu vào (vd. PDF từ app scan của iPhone) là một cuốn
   <tên>.pdf         sách dàn trang lại từ chữ OCR (gọn, tìm kiếm/copy được)
   <tên>.md          nội dung dạng text, để soát/sửa lỗi OCR
   <tên> - scan.pdf  ảnh các trang đã làm sạch (để đối chiếu)
+
+Sau khi soát/sửa lỗi OCR trong <tên>.md, chạy "snap2book typeset <tên>.md" để dàn lại
+<tên>.pdf (mặc định ghi cạnh file .md).
 """
 
 import argparse
@@ -35,10 +40,42 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return ap.parse_args(argv)
 
 
+def parse_typeset_args(argv: list[str]) -> argparse.Namespace:
+    ap = argparse.ArgumentParser(
+        prog="snap2book typeset", description="Dàn trang PDF từ file Markdown (đã soát/sửa lỗi OCR)."
+    )
+    ap.add_argument("markdown", type=Path, help="file .md (dạng snap2book xuất ra)")
+    ap.add_argument("-o", "--output", type=Path, help="file PDF ra (mặc định: cạnh file .md, đuôi .pdf)")
+    ap.add_argument("-q", "--quiet", action="store_true", help="chỉ in lỗi")
+    return ap.parse_args(argv)
+
+
+def typeset(args: argparse.Namespace) -> None:
+    from snap2book.markdown import from_markdown
+    from snap2book.typeset import to_pdf
+
+    try:
+        text = args.markdown.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        sys.exit(f"Không tìm thấy: {args.markdown}")
+    try:
+        book, title = from_markdown(text)
+    except ValueError as e:
+        sys.exit(f"{args.markdown}: {e}")
+    out = args.output or args.markdown.with_suffix(".pdf")
+    n = to_pdf(book, title or args.markdown.stem, out)
+    logging.info("=> %s (%d trang)", out, n)
+
+
 def main(argv: list[str] | None = None) -> None:
-    args = parse_args(argv)
+    argv = sys.argv[1:] if argv is None else argv
+    is_typeset = argv[:1] == ["typeset"]
+    args = parse_typeset_args(argv[1:]) if is_typeset else parse_args(argv)
     logging.basicConfig(level=logging.WARNING if args.quiet else logging.INFO, format="%(message)s")
     warnings.filterwarnings("ignore", category=FutureWarning, module="pymupdf")
+    if is_typeset:
+        typeset(args)
+        return
 
     try:
         jobs = find_jobs(args.input)
