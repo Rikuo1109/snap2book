@@ -9,6 +9,7 @@ Mỗi file PDF đầu vào (vd. PDF từ app scan của iPhone) là một cuốn
 
 Đầu ra cho mỗi cuốn, trong thư mục ra (mặc định output/):
   <tên>.pdf         sách dàn trang lại từ chữ OCR (gọn, tìm kiếm/copy được)
+  <tên>.epub        sách điện tử: chữ tự dàn theo màn hình, mục lục theo chương
   <tên>.md          nội dung dạng text, để soát/sửa lỗi OCR
   <tên> - scan.pdf  ảnh các trang đã làm sạch (để đối chiếu)
 
@@ -17,12 +18,12 @@ Kết quả làm sạch + OCR từng trang được cache trong <thư mục ra>/
 
 Sau khi soát/sửa lỗi OCR trong <tên>.md, chạy "snap2book typeset <tên>.md" để dàn lại
 <tên>.pdf (mặc định ghi cạnh file .md). Chạy lại snap2book sẽ không ghi đè <tên>.md đã
-sửa: bản OCR mới ghi ra <tên>.ocr.md và <tên>.pdf dàn từ bản đã sửa (--force để ghi đè).
+sửa: bản OCR mới ghi ra <tên>.ocr.md và <tên>.pdf/.epub dàn từ bản đã sửa (--force để ghi đè).
 
---to-books thêm <tên>.pdf vào app Sách (Apple Books) trên Mac; Sách đồng bộ sang iPhone nếu
-đã bật iCloud Drive cho Sách. Chỉ thêm khi nội dung PDF đổi, để không sinh bản trùng.
+--to-books thêm <tên>.epub (không có thì .pdf) vào app Sách (Apple Books) trên Mac; Sách đồng bộ
+sang iPhone nếu đã bật iCloud Drive cho Sách. Chỉ thêm khi nội dung đổi, để không sinh bản trùng.
 
---to-icloud chép <tên>.pdf vào iCloud Drive (mặc định snap2book/Sách đã xử lý); trên iPhone mở
+--to-icloud chép <tên>.pdf và <tên>.epub vào iCloud Drive (mặc định snap2book/Sách đã xử lý); trên iPhone mở
 bằng app Tệp, hoặc Chia sẻ → Sách. Không phụ thuộc vào đồng bộ của app Sách.
 """
 
@@ -95,16 +96,19 @@ def _add_to_books(ap: argparse.ArgumentParser) -> None:
     )
 
 
-def _deliver(pdf: Path, args: argparse.Namespace) -> None:
-    """Gửi pdf tới app Sách và/hoặc iCloud Drive theo cờ dòng lệnh."""
+def _deliver(files: list[Path], args: argparse.Namespace) -> None:
+    """Gửi sách tới app Sách và/hoặc iCloud Drive theo cờ dòng lệnh. iCloud nhận mọi file;
+    app Sách chỉ nhận một bản (EPUB nếu có, đọc dễ hơn) để không thành hai cuốn trùng nhau."""
     if args.to_books:
         from snap2book.books import send_to_books
 
-        send_to_books(pdf)
+        epubs = [f for f in files if f.suffix == ".epub"]
+        send_to_books((epubs or files)[0])
     if args.to_icloud:
         from snap2book.icloud import copy_to_icloud
 
-        copy_to_icloud(pdf, args.to_icloud)
+        for f in files:
+            copy_to_icloud(f, args.to_icloud)
 
 
 def _positive_int(text: str) -> int:
@@ -126,6 +130,7 @@ def parse_typeset_args(argv: list[str]) -> argparse.Namespace:
 
 
 def typeset(args: argparse.Namespace) -> None:
+    from snap2book.epub import to_epub
     from snap2book.markdown import from_markdown
     from snap2book.typeset import to_pdf
 
@@ -138,9 +143,12 @@ def typeset(args: argparse.Namespace) -> None:
     except ValueError as e:
         sys.exit(f"{args.markdown}: {e}")
     out = args.output or args.markdown.with_suffix(".pdf")
-    n = to_pdf(book, title or args.markdown.stem, out)
+    title = title or args.markdown.stem
+    n = to_pdf(book, title, out)
     logging.info("=> %s (%d trang)", out, n)
-    _deliver(out, args)
+    epub = out.with_suffix(".epub")
+    logging.info("=> %s (%d chương)", epub, to_epub(book, title, epub))
+    _deliver([out, epub], args)
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -170,7 +178,7 @@ def main(argv: list[str] | None = None) -> None:
         logging.info("%s:", name)
         outputs = output_paths(args.out_dir, name)
         if args.scan_only:
-            outputs.text_pdf = outputs.markdown = None
+            outputs.text_pdf = outputs.markdown = outputs.epub = None
         debug_dir = args.out_dir / "debug" / name if args.debug else None
         convert(
             inputs,
@@ -183,7 +191,7 @@ def main(argv: list[str] | None = None) -> None:
             cache_dir=None if args.no_cache else args.out_dir / ".cache" / name,
             force=args.force,
         )
-        _deliver(outputs.text_pdf or outputs.scan_pdf, args)
+        _deliver(outputs.books(), args)
 
 
 if __name__ == "__main__":

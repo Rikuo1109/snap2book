@@ -3,11 +3,12 @@
 Chuyển ảnh chụp sách (PDF từ app scan của iPhone, hoặc ảnh rời) thành sách PDF gọn:
 làm sạch từng trang, OCR tiếng Việt rồi dàn trang lại thành nội dung liền mạch.
 
-Mỗi cuốn sách cho ra 3 file trong `output/`:
+Mỗi cuốn sách cho ra 4 file trong `output/`:
 
 | File | Nội dung |
 |---|---|
 | `<tên>.pdf` | Sách dàn trang lại từ chữ OCR: khổ A5, tìm kiếm/copy được, chú thích ở chân trang |
+| `<tên>.epub` | Sách điện tử để đọc trên điện thoại: chữ tự dàn theo màn hình, chỉnh cỡ chữ, mục lục theo chương, bấm số mũ để xem chú thích |
 | `<tên>.md` | Nội dung dạng text, để đọc soát và sửa lỗi OCR (chạy lại không ghi đè bản đã sửa) |
 | `<tên> - scan.pdf` | Ảnh các trang đã làm sạch, để đối chiếu với bản gốc |
 
@@ -75,7 +76,7 @@ càng rõ, vì chi phí khởi động tiến trình (nạp OpenCV, Vision) ch�
 2. Mở `output/<tên>.md`, đối chiếu với `<tên> - scan.pdf` và sửa lỗi OCR. Giữ đúng dạng:
    `## ` tiêu đề chương, `### ` tiêu đề phụ, các đoạn cách nhau bằng dòng trống, chú thích
    ghi `[^n]` trong bài và `[^n]: nội dung` ở cuối file (số thứ tự được đánh lại tự động).
-3. `make typeset MD="output/<tên>.md"` → ghi đè `output/<tên>.pdf` bằng bản đã sửa.
+3. `make typeset MD="output/<tên>.md"` → ghi đè `output/<tên>.pdf` và `<tên>.epub` bằng bản đã sửa.
 
 Chạy lại `make` trên cùng cuốn sách không làm mất phần đã sửa: mỗi lần ghi `<tên>.md`, script
 lưu kèm mã băm vào file ẩn `output/.<tên>.md.sha256`. Lần chạy sau, nếu `<tên>.md` khác mã băm
@@ -102,7 +103,8 @@ snap2book/
    "…" → **Quét tài liệu**. Đổi tên file thành tên sách (hoặc `1`, `2`, … nếu để trong thư mục sách).
 2. Mac, trong Terminal: `make icloud` (tự tạo `Bản quét` nếu chưa có). Trang đã xử lý lần trước được
    lấy từ cache, chỉ trang mới phải OCR.
-3. iPhone: app **Tệp** → snap2book → **Sách đã xử lý**; muốn cho vào app Sách thì Chia sẻ → **Sách**.
+3. iPhone: app **Tệp** → snap2book → **Sách đã xử lý**. Mở file **`.epub`** rồi Chia sẻ → **Sách** để đọc
+   thoải mái nhất (chữ tự dàn theo màn hình); `.pdf` giữ đúng bố cục trang A5.
 
 Mỗi file PDF trong `Bản quét` là một cuốn; mỗi thư mục con là một cuốn, gồm mọi PDF và ảnh trong đó
 theo thứ tự tên ("2" trước "10"). Nếu một file PDF trùng tên với thư mục con thì dùng thư mục con.
@@ -113,7 +115,7 @@ Với thư mục khác hoặc lệnh khác, dùng `--to-icloud` / `ICLOUD=1`, vd
 macOS chặn ứng dụng chưa được cấp quyền đọc/ghi iCloud Drive: chạy trong Terminal (lần đầu bấm Cho
 phép), hoặc cấp quyền ở Cài đặt hệ thống → Quyền riêng tư & Bảo mật → Tệp và thư mục.
 
-**App Sách trên Mac.** `--to-books` (hoặc `make books`, `BOOKS=1`) thêm `<tên>.pdf` vào app Sách
+**App Sách trên Mac.** `--to-books` (hoặc `make books`, `BOOKS=1`) thêm `<tên>.epub` vào app Sách
 trên Mac. Sách chỉ đồng bộ PDF sang iPhone khi bật iCloud Drive cho Sách ở cả hai máy (Mac: Cài đặt
 hệ thống → [tên bạn] → iCloud → iCloud Drive → Sách; iPhone: Cài đặt → Ứng dụng → Sách → iCloud
 Drive), và kể cả khi đã bật, việc đồng bộ có thể không chạy, nên ưu tiên `--to-icloud`. Sách không
@@ -129,7 +131,8 @@ nằm gần giữa nhất.
 sources ─► cleanup ─► dewarp ─► scan_pdf                                  (<tên> - scan.pdf)
                         │
                         └─► ocr ─► spellfix ─► structure ─┬─► markdown    (<tên>.md) ─┐ sửa tay
-                                                          └─► typeset     (<tên>.pdf) ◄┘ snap2book typeset
+                                                          ├─► typeset     (<tên>.pdf)  ◄┤ snap2book typeset
+                                                          └─► epub        (<tên>.epub) ◄┘
 ```
 
 `cleanup`, `dewarp`, `ocr` chạy song song theo trang và được cache (`pages.py`, `cache.py`);
@@ -146,6 +149,7 @@ từ `spellfix` trở đi chạy trên cả cuốn.
 | `pagecheck.py` | Soát số trang in: trang thiếu, chụp lặp, sai thứ tự (có tính đến OCR đọc nhầm số) |
 | `spellfix.py` | Sửa lỗi dấu OCR: từ sai chính tả được thay bằng phương án đọc khác hoặc từ cùng chữ cái trong sách (từ điển tiếng Việt của macOS) |
 | `markdown.py` | Xuất Markdown (chú thích dạng `[^1]`) và đọc ngược lại để dàn trang bản đã sửa |
+| `epub.py` | Xuất EPUB 3: mỗi chương một file, mục lục, chú thích bật lên khi bấm số mũ |
 | `typeset.py` | Dàn trang PDF: chú thích ở chân trang có số mũ, chống dòng mồ côi |
 | `books.py` | Thêm PDF vào app Sách (Apple Books), bỏ qua nếu nội dung không đổi |
 | `icloud.py` | Chép PDF vào iCloud Drive để mở trên iPhone |

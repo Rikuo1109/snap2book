@@ -42,3 +42,12 @@ def test_loose_pdf_with_same_name_as_folder_is_skipped(tmp_path, caplog):
     inside = touch(tmp_path / "Vụ án" / "phần 2.pdf")
     assert find_jobs(tmp_path) == [("Vụ án", [inside])]
     assert "chuyển file này vào thư mục" in caplog.text
+
+
+def test_outputs_books_prefers_text_outputs(tmp_path):
+    from snap2book.pipeline import output_paths
+
+    out = output_paths(tmp_path, "Sách")
+    assert [p.name for p in out.books()] == ["Sách.pdf", "Sách.epub"]
+    out.text_pdf = out.markdown = out.epub = None  # chế độ chỉ-ảnh
+    assert [p.name for p in out.books()] == ["Sách - scan.pdf"]

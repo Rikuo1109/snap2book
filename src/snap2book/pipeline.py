@@ -23,6 +23,12 @@ class Outputs:
     scan_pdf: Path  # ảnh các trang đã làm sạch
     text_pdf: Path | None = None  # sách dàn trang lại từ chữ OCR
     markdown: Path | None = None  # nội dung dạng text
+    epub: Path | None = None  # sách điện tử (chữ tự dàn theo màn hình)
+
+    def books(self) -> list[Path]:
+        """Các file sách để đọc (PDF chữ, EPUB); chế độ chỉ-ảnh thì là PDF ảnh."""
+        found = [p for p in (self.text_pdf, self.epub) if p]
+        return found or [self.scan_pdf]
 
 
 def output_paths(out_dir: Path, name: str) -> Outputs:
@@ -30,6 +36,7 @@ def output_paths(out_dir: Path, name: str) -> Outputs:
         scan_pdf=out_dir / f"{name} - scan.pdf",
         text_pdf=out_dir / f"{name}.pdf",
         markdown=out_dir / f"{name}.md",
+        epub=out_dir / f"{name}.epub",
     )
 
 
@@ -125,6 +132,11 @@ def convert(
             book, title = _edited_book(outputs.markdown, written, book, title)
     n = to_pdf(book, title, outputs.text_pdf)
     log.info("=> %s (%d trang, từ %d trang chụp)", outputs.text_pdf, n, len(pages))
+    if outputs.epub:
+        from snap2book.epub import to_epub
+
+        chapters = to_epub(book, title, outputs.epub)
+        log.info("=> %s (%d chương)", outputs.epub, chapters)
     return outputs
 
 
