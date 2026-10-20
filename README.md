@@ -8,7 +8,7 @@ Mỗi cuốn sách cho ra 3 file trong `output/`:
 | File | Nội dung |
 |---|---|
 | `<tên>.pdf` | Sách dàn trang lại từ chữ OCR: khổ A5, tìm kiếm/copy được, chú thích ở chân trang |
-| `<tên>.md` | Nội dung dạng text, để đọc soát và sửa lỗi OCR |
+| `<tên>.md` | Nội dung dạng text, để đọc soát và sửa lỗi OCR (chạy lại không ghi đè bản đã sửa) |
 | `<tên> - scan.pdf` | Ảnh các trang đã làm sạch, để đối chiếu với bản gốc |
 
 ## Yêu cầu
@@ -25,12 +25,13 @@ make run IN=duong/dan/sach.pdf         # một file hoặc thư mục cụ thể
 make scan                              # chỉ xuất bản ảnh đã làm sạch, không OCR
 make debug                             # lưu thêm ảnh đánh dấu vùng cắt vào output/debug/
 make typeset MD=output/sach.md         # dàn lại sach.pdf từ file .md đã sửa
+make FORCE=1                           # ghi đè cả file .md đã sửa tay
 ```
 
 Hoặc gọi trực tiếp sau khi cài (`make setup` hoặc `pip install -e .`):
 
 ```bash
-snap2book resources/ -o output [-j N] [--no-cache] [--scan-only] [--no-dewarp] [--no-spellfix] [--debug] [-v] [--keep-duplicates] [-q]
+snap2book resources/ -o output [-j N] [--no-cache] [--scan-only] [--no-dewarp] [--no-spellfix] [--debug] [-v] [--keep-duplicates] [--force] [-q]
 snap2book typeset output/sach.md [-o sach.pdf] [-q]
 ```
 
@@ -74,7 +75,12 @@ càng rõ, vì chi phí khởi động tiến trình (nạp OpenCV, Vision) ch�
    ghi `[^n]` trong bài và `[^n]: nội dung` ở cuối file (số thứ tự được đánh lại tự động).
 3. `make typeset MD="output/<tên>.md"` → ghi đè `output/<tên>.pdf` bằng bản đã sửa.
 
-Lưu ý: chạy lại `make` trên cùng cuốn sách sẽ ghi đè file `.md` đã sửa; nên sao chép ra chỗ khác.
+Chạy lại `make` trên cùng cuốn sách không làm mất phần đã sửa: mỗi lần ghi `<tên>.md`, script
+lưu kèm mã băm vào file ẩn `output/.<tên>.md.sha256`. Lần chạy sau, nếu `<tên>.md` khác mã băm
+đó (tức đã sửa tay), script giữ nguyên nó, ghi bản OCR mới ra `<tên>.ocr.md` để so sánh, in cảnh
+báo và dàn `<tên>.pdf` từ bản đã sửa (`<tên> - scan.pdf` vẫn được làm lại). File `.md` không có
+mã băm (xuất từ bản cũ) cũng được giữ lại cho chắc. Muốn ghi đè bằng bản OCR mới: thêm `--force`
+(`make run IN=... FORCE=1`).
 
 **Mẹo chụp:** đưa trang cần chụp vào giữa khung hình. Khi ảnh có hai trang, script chọn trang
 nằm gần giữa nhất.

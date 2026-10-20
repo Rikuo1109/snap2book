@@ -4,6 +4,7 @@
 #   make scan                        chỉ xuất bản ảnh đã làm sạch, không OCR
 #   make debug                       lưu thêm ảnh đánh dấu vùng cắt vào output/debug/
 #   make typeset MD=output/sach.md   dàn lại PDF từ file .md đã sửa (ghi đè output/sach.pdf)
+#   make FORCE=1                     ghi đè cả file .md đã sửa tay (mặc định giữ, bản mới ra .ocr.md)
 #   make test | lint | format        kiểm thử, kiểm tra / định dạng code
 #   make clean                       xoá output/ (cả cache output/.cache/)   make distclean   xoá cả .venv/
 
@@ -13,7 +14,7 @@ OUT ?= output
 PYTHON ?= $(firstword $(wildcard $(HOME)/.pyenv/versions/3.12*/bin/python) python3)
 VENV := .venv
 BIN := $(VENV)/bin
-CLI := $(BIN)/snap2book -o "$(OUT)"
+CLI := $(BIN)/snap2book -o "$(OUT)" $(if $(FORCE),--force)
 
 .PHONY: all run scan debug typeset setup test lint format clean distclean
 

@@ -1,6 +1,6 @@
 """Dòng lệnh:
   snap2book <file hoặc thư mục> [-o thư_mục_ra] [-j số_tiến_trình] [--no-cache] [--scan-only]
-            [--no-dewarp] [--no-spellfix] [--debug]
+            [--no-dewarp] [--no-spellfix] [--debug] [--force]
   snap2book typeset <file .md> [-o file.pdf]     dàn trang lại từ Markdown đã sửa
 
 Mỗi file PDF đầu vào (vd. PDF từ app scan của iPhone) là một cuốn sách; các ảnh rời
@@ -15,7 +15,8 @@ Kết quả làm sạch + OCR từng trang được cache trong <thư mục ra>/
 (vd. sau khi thêm vài ảnh) chỉ phải xử lý các trang mới / đã đổi.
 
 Sau khi soát/sửa lỗi OCR trong <tên>.md, chạy "snap2book typeset <tên>.md" để dàn lại
-<tên>.pdf (mặc định ghi cạnh file .md).
+<tên>.pdf (mặc định ghi cạnh file .md). Chạy lại snap2book sẽ không ghi đè <tên>.md đã
+sửa: bản OCR mới ghi ra <tên>.ocr.md và <tên>.pdf dàn từ bản đã sửa (--force để ghi đè).
 """
 
 import argparse
@@ -57,6 +58,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--keep-duplicates",
         action="store_true",
         help="giữ cả các ảnh chụp lặp một trang (mặc định bỏ bớt, theo số trang in)",
+    )
+    ap.add_argument(
+        "--force",
+        action="store_true",
+        help="ghi đè cả <tên>.md đã sửa tay (mặc định giữ lại, bản OCR mới ghi ra <tên>.ocr.md)",
     )
     ap.add_argument("-q", "--quiet", action="store_true", help="chỉ in lỗi")
     ap.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
@@ -132,6 +138,7 @@ def main(argv: list[str] | None = None) -> None:
             spellfix=not args.no_spellfix,
             jobs=args.jobs,
             cache_dir=None if args.no_cache else args.out_dir / ".cache" / name,
+            force=args.force,
         )
 
 
