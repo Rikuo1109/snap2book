@@ -27,9 +27,15 @@ def output_paths(out_dir: Path, name: str) -> Outputs:
     )
 
 
-def convert(inputs: Sequence[Path], outputs: Outputs, debug_dir: Path | None = None) -> Outputs:
+def convert(
+    inputs: Sequence[Path],
+    outputs: Outputs,
+    debug_dir: Path | None = None,
+    drop_duplicates: bool = True,
+) -> Outputs:
     """Xử lý các file đầu vào (theo thứ tự trang) thành một cuốn sách.
-    outputs.text_pdf = None thì bỏ qua OCR, chỉ xuất PDF ảnh."""
+    outputs.text_pdf = None thì bỏ qua OCR, chỉ xuất PDF ảnh.
+    drop_duplicates: bỏ nội dung ảnh chụp lặp một trang (theo số trang in)."""
     if debug_dir:
         debug_dir.mkdir(parents=True, exist_ok=True)
 
@@ -52,13 +58,21 @@ def convert(inputs: Sequence[Path], outputs: Outputs, debug_dir: Path | None = N
     # import muộn: OCR cần macOS (Apple Vision), chế độ chỉ-ảnh thì không cần
     from snap2book.markdown import to_markdown
     from snap2book.ocr import ocr_page
-    from snap2book.structure import build_book
+    from snap2book.pagecheck import check_pages
+    from snap2book.structure import build_book, page_number
     from snap2book.typeset import to_pdf
 
     lines = []
     for idx, img in enumerate(pages, 1):
         lines.append(ocr_page(img))
         log.info("  OCR trang %d: %d dòng", idx, len(lines[-1]))
+
+    check = check_pages([page_number(page) for page in lines], [len(page) for page in lines])
+    for msg in check.warnings:
+        log.warning("  cảnh báo: %s", msg)
+    if check.duplicates and drop_duplicates:
+        log.warning("  bỏ ảnh chụp lặp: %s", ", ".join(str(i + 1) for i in check.duplicates))
+        lines = [page for i, page in enumerate(lines) if i not in check.duplicates]
     book = build_book(lines)
     title = outputs.text_pdf.stem
 
