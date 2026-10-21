@@ -15,6 +15,9 @@ import numpy as np
 
 MIN_CURVE = 0.012  # độ võng tối đa (theo chiều rộng ảnh) dưới mức này thì coi là phẳng, để nguyên
 POLY_DEG = 3
+LINE_MAX_H = 0.08  # khung bao dòng cao hơn chừng này (theo chiều cao ảnh) thì phải kiểm tra thêm
+TILTED_MAX_H = 0.15  # dòng nghiêng: khung bao cao tới chừng này
+TILTED_MAX_THICK = 1.6  # ... nếu độ dày theo cột không quá chừng này lần dòng thường (không phải 2 dòng dính)
 GRID_STEP = 16  # px; tính độ lệch trên lưới thưa rồi phóng lên cả ảnh
 
 
@@ -42,7 +45,12 @@ class TextLine:
 
 
 def find_lines(img: np.ndarray) -> list[TextLine]:
-    """Các dòng chữ dài (≥ nửa chiều rộng ảnh) với đường giữa đã khớp đa thức."""
+    """Các dòng chữ dài (≥ nửa chiều rộng ảnh) với đường giữa đã khớp đa thức.
+
+    Dòng gần gáy sách thường nghiêng mạnh nên khung bao cao (tới 12% trang), cao hơn mức
+    LINE_MAX_H dùng để loại vệt bẩn và các dòng dính nhau. Những khối cao như vậy vẫn được nhận
+    nếu ở từng cột chúng chỉ dày cỡ một dòng chữ (dòng nghiêng), không dày gấp đôi (hai dòng dính).
+    """
     ink = (img < 128).astype(np.uint8)
     h, w = ink.shape
     # nối các chữ trong dòng: kernel ngang dài, dọc 1px để không dính sang dòng khác
@@ -50,18 +58,19 @@ def find_lines(img: np.ndarray) -> list[TextLine]:
     blobs = cv2.morphologyEx(ink, cv2.MORPH_CLOSE, kernel)
     n, labels, stats, _ = cv2.connectedComponentsWithStats(blobs, 8)
     step = max(2, w // 60)
-    lines = []
+    found = []  # (khung cao bất thường?, độ dày theo cột, dòng)
     for i in range(1, n):
         x, y, bw, bh, _ = stats[i]
-        if bw < w * 0.5 or bh > h * 0.08:
+        if bw < w * 0.5 or bh > h * TILTED_MAX_H:
             continue
         sub = (labels[y : y + bh, x : x + bw] == i) & (ink[y : y + bh, x : x + bw] > 0)
-        xs, ys = [], []
+        xs, ys, thick = [], [], []
         for c in range(0, bw, step):
             rows = np.nonzero(sub[:, c : c + step].any(axis=1))[0]
             if len(rows) >= 2:
                 xs.append(x + c + step / 2)
                 ys.append(y + (rows.min() + rows.max()) / 2)
+                thick.append(rows.max() - rows.min())
         if len(xs) < 20:
             continue
         xs, ys = np.array(xs), np.array(ys)
@@ -71,7 +80,11 @@ def find_lines(img: np.ndarray) -> list[TextLine]:
         good = resid < max(3.0, 2.5 * np.median(resid))
         if good.sum() >= 15:
             coef = np.polyfit(xs[good], ys[good], POLY_DEG)
-        lines.append(TextLine(xs, ys, coef))
+        found.append((bh > h * LINE_MAX_H, float(np.median(thick)), TextLine(xs, ys, coef)))
+
+    normal = [t for tall, t, _ in found if not tall]
+    typical = float(np.median(normal)) if normal else 0.0
+    lines = [line for tall, t, line in found if not tall or (typical and t <= TILTED_MAX_THICK * typical)]
     lines.sort(key=lambda line: line.y_mean)
     return lines
 

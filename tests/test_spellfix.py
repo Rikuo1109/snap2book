@@ -77,3 +77,27 @@ def test_frequent_word_wrongly_flagged_is_kept(book):
 
 def test_case_preserved():
     assert fix("Dến", book="đến đến đến") == "Đến"
+
+
+def test_word_kept_when_its_phrase_recurs_in_the_book():
+    # từ điển báo nhầm "ngu" là sai; "ngủ" phổ biến hơn, nhưng cụm "ngu ngốc" lặp lại trong sách
+    def strict(word):
+        return word != "ngu" and is_valid(word)
+
+    book = ["thật ngu ngốc", "đi ngủ sớm", "buồn ngủ quá", "ngủ ngon", "giấc ngủ dài"]
+    vocab = Vocabulary([*book, "anh ngu ngốc"])
+    assert fix_text("anh ngu ngốc", [], strict, vocab)[0] == "anh ngu ngốc"
+
+
+def test_repeated_misreading_still_fixed_when_context_supports_candidate():
+    # "chắng phải" đọc sai 2 lần, nhưng "chẳng phải" xuất hiện nhiều hơn
+    book = ["thì chắng phải", "chẳng phải thế", "chẳng phải vậy", "chẳng phải đâu"]
+    vocab = Vocabulary([*book, "nó chắng phải"])
+    assert fix_text("nó chắng phải", [], lambda w: w != "chắng", vocab)[0] == "nó chẳng phải"
+
+
+def test_context_beats_fewer_marks():
+    # "may" chỉ khác 1 dấu, "mấy" khác 2, nhưng "không mấy" mới là cụm có trong sách
+    book = ["không mấy ai", "không mấy khi", "gặp may mắn", "may quá"]
+    vocab = Vocabulary([*book, "cô không mãy ưa"])
+    assert fix_text("cô không mãy ưa", [], is_valid, vocab)[0] == "cô không mấy ưa"
