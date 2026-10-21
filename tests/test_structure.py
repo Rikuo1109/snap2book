@@ -64,7 +64,7 @@ def test_chapter_heading(page):
             )
         ]
     )
-    assert texts(book, "h1") == ["CHƯƠNG I"]
+    assert texts(book, "h1") == ["Chương 1"]
     assert texts(book, "h2") == ["Những mối quan hệ của con người"]
     assert texts(book) == ["Cuối tháng Sáu năm 1947, Utagawa Kazuma gọi cho tôi và hẹn gặp."]
 
@@ -147,5 +147,25 @@ def test_subtitle_still_a_heading_on_page_full_of_short_lines(page):
     rows += [(f"dòng đầy {k} của đoạn mở đầu", "body") for k in range(6)]
     rows += [(f"dòng ngắn {k}", "last") for k in range(12)]  # lá thư: nhiều dòng ngắn hơn dòng đầy
     book = build_book([page(*rows)])
-    assert texts(book, "h1") == ["CHƯƠNG 2"]
+    assert texts(book, "h1") == ["Chương 2"]
     assert texts(book, "h2") == ["Những kẻ không ai ngờ"]
+
+
+def chapters(*titles):
+    from snap2book.structure import Block, Book, number_chapters
+
+    book = Book([Block("h1", t) for t in titles] + [Block("h1", "Lời bạt")])
+    number_chapters(book)
+    return [b.text for b in book.blocks]
+
+
+def test_chapter_titles_normalized_and_numbered():
+    # "I" là số 1 in bằng font trang trí; "CHUONG" thiếu dấu; tiêu đề không phải chương giữ nguyên
+    assert chapters("CHƯƠNG I", "CHUONG 2", "Chương 3") == ["Chương 1", "Chương 2", "Chương 3", "Lời bạt"]
+    assert chapters("CHƯƠNG IV", "CHƯƠNG V") == ["Chương 4", "Chương 5", "Lời bạt"]
+
+
+def test_unreadable_or_wrong_chapter_numbers_follow_order():
+    assert chapters("CHƯƠNG :", "CHƯƠNG 3") == ["Chương 2", "Chương 3", "Lời bạt"]  # suy ra từ chương sau
+    assert chapters("CHƯƠNG 2", "CHƯƠNG 2", "CHƯƠNG") == ["Chương 2", "Chương 3", "Chương 4", "Lời bạt"]
+    assert chapters("CHƯƠNG 1", "CHƯƠNG 5") == ["Chương 1", "Chương 5", "Lời bạt"]  # chụp bỏ qua vài chương
