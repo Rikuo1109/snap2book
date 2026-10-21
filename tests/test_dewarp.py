@@ -68,3 +68,19 @@ def test_merged_lines_are_rejected():
     # dòng nghiêng, không dùng để làm phẳng
     cv2.rectangle(img, (60, 120 + 2 * 75), (1080, 120 + 4 * 75 + 28), 0, -1)
     assert len(find_lines(img)) == 3
+
+
+def test_chapter_heading_far_above_body_is_kept():
+    from snap2book.cleanup import main_page_region
+
+    h, w = 2400, 1600
+    mask = np.zeros((h, w), np.uint8)
+    for k in range(25):  # thân bài: 25 dòng từ 40% trang
+        y = int(h * 0.40) + k * 50
+        for x in range(100, 1500, 80):  # từ cách nhau 10px: nối thành dòng như chữ thật
+            mask[y : y + 25, x : x + 70] = 1
+    for x in range(560, 960, 60):  # "CHƯƠNG": cách thân bài ~15% trang (lớn hơn khoảng cách gom thường)
+        mask[int(h * 0.20) : int(h * 0.20) + 60, x : x + 45] = 1
+    mask[int(h * 0.20) : int(h * 0.20) + 60, 1000:1028] = 1  # chữ số "2": hẹp và cao
+    _, (x0, y0, x1, y1) = main_page_region(mask)
+    assert y0 <= int(h * 0.20) and x1 >= 1028

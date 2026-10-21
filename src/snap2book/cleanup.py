@@ -17,6 +17,7 @@ from snap2book.dewarp import dewarp
 
 INK_THRESHOLD = 150  # sau khi làm phẳng ánh sáng, điểm tối hơn mức này là mực
 MAX_SKEW_DEG = 6.0
+HEADING_GAP = 0.25  # tiêu đề chương có thể cách đoạn đầu tới chừng này (theo chiều cao ảnh)
 
 
 @dataclass
@@ -110,6 +111,7 @@ def main_page_region(mask: np.ndarray) -> tuple[np.ndarray, tuple[int, int, int,
 
     # nới dần theo chiều dọc: chỉ nhận khối cùng cột và nằm sát vùng đã chọn
     max_gap = h * 0.05
+    body_top = int(stats[main][1])  # mép trên thân bài (khối chính), cố định khi gom tiêu đề
     changed = True
     while changed:
         changed = False
@@ -119,12 +121,17 @@ def main_page_region(mask: np.ndarray) -> tuple[np.ndarray, tuple[int, int, int,
             x, y, cw, ch, _ = stats[i]
             if ink[i] < 0.04 * cw * ch:  # lưa thưa vài chấm: nhiễu, không phải dòng chữ
                 continue
-            if ch > 2 * cw:  # vệt dọc (bóng gáy sách, mép trang) - chữ luôn nằm ngang
-                continue
             overlap = min(mx1, x + cw) - max(mx0, x)
             in_column = overlap > 0.8 * cw  # nằm gọn trong cột, không tràn sang trang khác
             gap = max(y0 - (y + ch), y - y1, 0)
-            if in_column and gap < max_gap:
+            # tiêu đề chương: nằm trên thân bài, ở nửa trên trang, cách đoạn đầu một khoảng trắng lớn
+            heading = y + ch <= body_top and y + ch < h * 0.5 and gap < h * HEADING_GAP
+            # vệt dọc (bóng gáy sách, mép trang, đuôi dòng trang bên cạnh bị mép ảnh cắt): chữ luôn
+            # nằm ngang. Riêng ở chỗ tiêu đề, một chữ in đậm hẹp ("2", "i") sau khi nới theo chiều
+            # dọc cũng cao ~2.5 lần rộng, nên ở đó cho tới 3 lần
+            if ch > (3 if heading else 2) * cw:
+                continue
+            if in_column and (gap < max_gap or heading):
                 selected.add(i)
                 x0, y0 = min(x0, x), min(y0, y)
                 x1, y1 = max(x1, x + cw), max(y1, y + ch)
