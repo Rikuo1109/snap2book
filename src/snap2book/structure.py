@@ -9,6 +9,7 @@ Không phụ thuộc OCR engine: chỉ cần các dòng có toạ độ chuẩn 
 """
 
 import re
+import unicodedata
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Literal, Protocol
@@ -266,4 +267,45 @@ def build_book(pages: Sequence[Sequence[TextLine]]) -> Book:
     for lines in pages:
         builder.add_page(lines)
     builder.end_paragraph()
+    number_chapters(builder.book)
     return builder.book
+
+
+_CHAPTER = re.compile(r"^chuong\b\W*(\S*)\W*$")  # trên chữ đã bỏ dấu, chữ thường
+_ROMAN = {"i": 1, "v": 5, "x": 10, "l": 50}
+
+
+def _unaccent(text: str) -> str:
+    decomposed = unicodedata.normalize("NFD", text.replace("đ", "d").replace("Đ", "D"))
+    return "".join(c for c in decomposed if unicodedata.category(c) != "Mn").lower()
+
+
+def _chapter_number(token: str) -> int | None:
+    """ "2" -> 2, "IV" -> 4; chữ số kiểu trang trí hay bị OCR đọc thành "I", "l", "|" -> 1."""
+    token = token.lower().replace("|", "i")
+    if token.isdigit():
+        return int(token)
+    if token and all(c in _ROMAN for c in token):
+        values = [_ROMAN[c] for c in token]
+        return sum(-v if i + 1 < len(values) and v < values[i + 1] else v for i, v in enumerate(values))
+    return None
+
+
+def number_chapters(book: Book) -> None:
+    """Đổi tiêu đề chương ("CHƯƠNG I", "CHUONG 2", "Chương :") thành "Chương N" thống nhất.
+
+    Số chương phải tăng dần: số đọc được mà không lớn hơn chương trước (hoặc không đọc được)
+    thì lấy chương trước + 1; chương đầu không đọc được số thì lấy số chương sau - 1, hoặc 1.
+    Số lớn hơn chương trước + 1 vẫn giữ (sách chụp bỏ qua vài chương).
+    """
+    heads = [b for b in book.blocks if b.kind == "h1" and _CHAPTER.match(_unaccent(b.text.strip()))]
+    read = [_chapter_number(_CHAPTER.match(_unaccent(b.text.strip())).group(1)) for b in heads]
+    prev = None
+    for k, (block, n) in enumerate(zip(heads, read, strict=True)):
+        if prev is None and n is None:
+            later = next(((m, j) for j, m in enumerate(read[k + 1 :], 1) if m), None)
+            n = max(1, later[0] - later[1]) if later else 1
+        elif prev is not None and (n is None or n <= prev):
+            n = prev + 1
+        block.text = f"Chương {n}"
+        prev = n
