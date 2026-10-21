@@ -3,6 +3,10 @@ import pytest
 from snap2book.spellfix import Vocabulary, base_form, fix_text, mark_distance
 
 DICTIONARY = {
+    "trò",
+    "trở",
+    "thành",
+    "muốn",
     "hắn",
     "hằn",
     "định",
