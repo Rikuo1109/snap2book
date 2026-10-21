@@ -46,6 +46,7 @@ def note_ref(n: int) -> str:
 
 INDENT = 0.03  # dòng lùi vào hơn lề trái chừng này (theo chiều rộng trang) = đầu đoạn
 SHORT_LINE = 0.12  # dòng ngắn hơn lề phải chừng này = cuối đoạn
+LOCAL_LINES = 2  # so độ dài dòng với chừng này dòng ngay phía trên
 FOOTER_TOP = 0.92  # dòng nằm dưới mức này (theo chiều cao trang) luôn thuộc vùng chân trang
 FOOTER_MIN_TOP = 0.8  # hàng cuối trang tách xa phần trên (FOOTER_GAP) và thấp hơn mức này: chân trang
 FOOTER_GAP = 1.6  # khoảng cách tới hàng trên, tính theo khoảng cách dòng thường của trang
@@ -119,6 +120,7 @@ Margin = Callable[[float], float]  # lề (trái/phải) tại độ cao y của
 
 MIN_SLANT = 0.02  # lề trôi ít hơn chừng này từ dòng đầu tới dòng cuối: coi là thẳng đứng
 MIN_SLANT_LINES = 8  # ít dòng hơn thì không đủ để ước lượng lề nghiêng
+MARGIN_TOL = 0.015  # dòng cách đường lề trong chừng này (theo chiều rộng trang) coi là chạm lề
 
 
 def _margin(ys: np.ndarray, xs: np.ndarray, side: Literal["left", "right"]) -> Margin:
@@ -126,19 +128,35 @@ def _margin(ys: np.ndarray, xs: np.ndarray, side: Literal["left", "right"]) -> M
 
     Thường lề thẳng đứng: trái = trung vị x0, phải = phân vị 90 của x1. Nhưng trang chụp chéo
     góc (phối cảnh) thì khối chữ là hình thang, lề trôi dần theo chiều dọc; coi lề là hằng số thì
-    nửa trang trông như dòng nào cũng thụt đầu dòng / cũng là dòng cuối đoạn. Khi đó khớp lề
-    bằng đường thẳng x = a*y + b, lặp vài lượt bỏ các dòng lệch vào trong (thụt đầu dòng ở lề
-    trái, dòng ngắn cuối đoạn ở lề phải).
+    nửa trang trông như dòng nào cũng thụt đầu dòng / cũng là dòng cuối đoạn. Khi đó lề là đường
+    thẳng x = a*y + b bao ngoài khối chữ: chạm nhiều dòng nhất mà gần như không dòng nào vượt
+    qua. Dòng thụt đầu dòng, dòng ngắn (kể cả cả trang thư toàn dòng ngắn) nằm hẳn bên trong nên
+    không kéo lệch nó.
     """
     const = float(np.median(xs)) if side == "left" else float(np.percentile(xs, 90))
     if len(xs) < MIN_SLANT_LINES:
         return lambda y: const
-    keep = np.ones(len(xs), bool)
-    for _ in range(5):
-        coef = np.polyfit(ys[keep], xs[keep], 1)
-        resid = xs - np.polyval(coef, ys)
-        # bên lề: trái giữ 70% dòng lệch ít sang phải nhất, phải giữ 70% lệch ít sang trái nhất
-        keep = resid <= np.quantile(resid, 0.7) if side == "left" else resid >= np.quantile(resid, 0.3)
+    out = -xs if side == "left" else xs  # quy về lề phải: đường bao trên của các điểm
+    best, best_score = None, 0
+    for i in range(len(xs)):
+        for j in range(i + 1, len(xs)):
+            if abs(ys[j] - ys[i]) < 0.1:  # hai dòng quá gần nhau theo chiều dọc: hệ số góc không tin được
+                continue
+            slope = (out[j] - out[i]) / (ys[j] - ys[i])
+            resid = out - (out[i] + slope * (ys - ys[i]))
+            if (resid > MARGIN_TOL * 1.5).sum() > 1:  # đường cắt vào trong khối chữ
+                continue
+            score = int((np.abs(resid) <= MARGIN_TOL).sum())
+            if score > best_score:
+                best, best_score = (i, j), score
+    if best is None or best_score < MIN_SLANT_LINES // 2:
+        return lambda y: const
+    i, j = best
+    slope = (out[j] - out[i]) / (ys[j] - ys[i])
+    near = np.abs(out - (out[i] + slope * (ys - ys[i]))) <= MARGIN_TOL
+    coef = np.polyfit(ys[near], out[near], 1)  # khớp lại trên các dòng chạm lề
+    if side == "left":
+        coef = -coef
     if abs(coef[0]) * (ys.max() - ys.min()) < MIN_SLANT:
         return lambda y: const
     return lambda y: float(np.polyval(coef, y))
@@ -190,9 +208,14 @@ class _Builder:
 
         start = self._take_heading(body, left, right)
         end = self._take_footnote(body, start)
-        for line, y in zip(body[start:end], ys[start:end], strict=True):
+        text_lines = body[start:end]
+        for k, (line, y) in enumerate(zip(text_lines, ys[start:end], strict=True)):
             self.add_line(line.text.strip(), starts_paragraph=line.x0 > left(y) + INDENT)
-            if line.x1 < right(y) - SHORT_LINE:
+            # dòng cuối đoạn: ngắn hẳn so với các dòng ngay trên nó (dòng đầu trang: so với dòng dưới),
+            # không so với lề cả trang: khung thư in hẹp hơn trang, các dòng dài ngang nhau là một đoạn
+            near = text_lines[max(0, k - LOCAL_LINES) : k + (2 if k == 0 else 1)]
+            local_right = min(right(y), max(other.x1 for other in near))
+            if line.x1 < local_right - SHORT_LINE:
                 self.end_paragraph()
 
     def _take_heading(self, body: Sequence[TextLine], left: Margin, right: Margin) -> int:

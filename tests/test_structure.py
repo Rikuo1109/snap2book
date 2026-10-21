@@ -114,3 +114,38 @@ def test_last_body_line_not_mistaken_for_footer(page):
     body = [(f"dòng {k} của đoạn văn rất dài", "body") for k in range(20)]
     lines = page(*body, ("HẾT", "center"))  # chữ hoa nhưng sát ngay dòng trên: không phải chân trang
     assert "HẾT" in " ".join(b.text for b in build_book([lines]).blocks)
+
+
+def test_letter_box_lines_join_into_one_paragraph(page):
+    lines = page(
+        ("Đó là buổi sáng ngày mười tháng Bảy và tôi nhận", "indent"),
+        ("được một lá thư từ Kazuma.", "last"),
+        ("Trong thư nói rằng:", "last"),
+    )
+    # khung thư hẹp hơn trang: các dòng dài ngang nhau (~0.75) là một đoạn, chỉ dòng cuối ngắn
+    for k, text in enumerate(
+        [
+            "Văn phòng du lịch sẽ gửi vé",
+            "cho anh vào ngày mười lăm",
+            "tháng Bảy, nên xin hãy đến",
+            "bằng chuyến tàu cuối ngày.",
+        ]
+    ):
+        x1 = 0.75 if k < 3 else 0.45
+        lines.append(type(lines[0])(text, 0.10 if k == 0 else 0.05, 0.2 + 0.035 * k, x1, 0.23 + 0.035 * k))
+    lines += page(*[(f"dòng thường số {k} của trang", "body") for k in range(6)])
+    for i, line in enumerate(lines[-6:]):
+        line.y0, line.y1 = 0.4 + 0.035 * i, 0.43 + 0.035 * i
+    paras = texts(build_book([lines]))
+    letter = "Văn phòng du lịch sẽ gửi vé cho anh vào ngày mười lăm tháng Bảy, nên xin hãy đến"
+    assert f"{letter} bằng chuyến tàu cuối ngày." in paras
+
+
+def test_subtitle_still_a_heading_on_page_full_of_short_lines(page):
+    rows = [("CHƯƠNG 2", "center"), ("Những kẻ không ai ngờ", "center")]
+    rows += [("Đoạn mở đầu của chương", "body", 0.25)]
+    rows += [(f"dòng đầy {k} của đoạn mở đầu", "body") for k in range(6)]
+    rows += [(f"dòng ngắn {k}", "last") for k in range(12)]  # lá thư: nhiều dòng ngắn hơn dòng đầy
+    book = build_book([page(*rows)])
+    assert texts(book, "h1") == ["CHƯƠNG 2"]
+    assert texts(book, "h2") == ["Những kẻ không ai ngờ"]
