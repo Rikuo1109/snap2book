@@ -101,3 +101,16 @@ def test_context_beats_fewer_marks():
     book = ["không mấy ai", "không mấy khi", "gặp may mắn", "may quá"]
     vocab = Vocabulary([*book, "cô không mãy ưa"])
     assert fix_text("cô không mãy ưa", [], is_valid, vocab)[0] == "cô không mấy ưa"
+
+
+def test_real_word_fixed_only_with_ocr_and_two_sided_context():
+    book = ["sẽ trở thành nhà văn", "muốn trở thành bác sĩ", "đã trở thành bạn"]
+    vocab = Vocabulary([*book, "muốn trò thành nhà văn"])
+    # Vision cũng đọc "trở", và "muốn trở" / "trở thành" đều có trong sách: sửa
+    assert fix_text("muốn trò thành nhà văn", ["muốn trở thành nhà văn"], is_valid, vocab)[0] == (
+        "muốn trở thành nhà văn"
+    )
+    # không có phương án đọc nào khác: giữ nguyên dù sách có "trở thành"
+    assert fix_text("muốn trò thành nhà văn", [], is_valid, vocab)[0] == "muốn trò thành nhà văn"
+    # cuối dòng (chỉ có ngữ cảnh một phía): giữ nguyên
+    assert fix_text("muốn trò", ["muốn trở"], is_valid, vocab)[0] == "muốn trò"

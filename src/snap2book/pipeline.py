@@ -112,22 +112,26 @@ def convert(
     from snap2book.structure import build_book, page_number
     from snap2book.typeset import to_pdf
 
-    if spellfix:
-        from snap2book.spellfix import MacSpellChecker, fix_pages
-
-        # cần cả sách để biết tần suất từ, nên sửa sau khi OCR xong mọi trang
-        per_page = fix_pages(lines, MacSpellChecker())
-        for idx, changes in enumerate(per_page, 1):
-            for c in changes:
-                log.debug("    trang %d: %s → %s | %s", idx, c.before, c.after, c.line)
-        log.info("  sửa dấu: %d từ", sum(len(c) for c in per_page))
-
     check = check_pages([page_number(page) for page in lines], [len(page) for page in lines])
     for msg in check.warnings:
         log.warning("  cảnh báo: %s", msg)
+    photos = list(range(1, len(lines) + 1))  # số thứ tự ảnh của từng trang còn giữ, để ghi log
     if check.duplicates and drop_duplicates:
         log.warning("  bỏ ảnh chụp lặp: %s", ", ".join(str(i + 1) for i in check.duplicates))
         lines = [page for i, page in enumerate(lines) if i not in check.duplicates]
+        photos = [i + 1 for i in range(len(photos)) if i not in check.duplicates]
+
+    if spellfix:
+        from snap2book.spellfix import MacSpellChecker, fix_pages
+
+        # cần cả sách để biết tần suất từ, nên sửa sau khi OCR xong mọi trang; sau khi bỏ ảnh chụp
+        # lặp, để hai bản đọc lệch nhau của cùng một trang không làm bằng chứng cho nhau
+        per_page = fix_pages(lines, MacSpellChecker())
+        for photo, changes in zip(photos, per_page, strict=True):
+            for c in changes:
+                log.debug("    ảnh %d: %s → %s | %s", photo, c.before, c.after, c.line)
+        log.info("  sửa dấu: %d từ", sum(len(c) for c in per_page))
+
     book = build_book(lines)
     title = next(p for p in (outputs.epub, outputs.markdown, outputs.text_pdf) if p).stem
 

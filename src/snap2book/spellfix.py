@@ -28,6 +28,7 @@ WORD = re.compile(r"[^\W\d_]+")  # chỉ chữ cái (kể cả có dấu), khôn
 NAME_MIN_COUNT = 3  # từ không có trong từ điển nhưng xuất hiện ít nhất chừng này lần (tên riêng)
 ALT_BONUS = 0.5  # ưu tiên nhẹ ứng viên có trong phương án đọc khác của chính dòng đó
 MAX_VOCAB_MARKS = 2  # ứng viên chỉ lấy từ sách (không có trong ảnh) được khác tối đa chừng này dấu
+REAL_WORD_MIN_CONTEXT = 2  # từ có thật chỉ đổi khi cụm mới xuất hiện ở chỗ khác ít nhất chừng này lần
 
 IsValid = Callable[[str], bool]
 
@@ -126,14 +127,12 @@ def fix_text(
     spans = [(m.start(), m.end(), m.group()) for m in WORD.finditer(text)]
     words = [w for _, _, w in spans]
     bad = [i for i, w in enumerate(words) if not is_valid(w)]
-    if not bad:
-        return text, []
-
-    from_alts: dict[int, list[str]] = {i: [] for i in bad}
+    from_alts: dict[int, list[str]] = {i: [] for i in range(len(words))}
     for alt in alternatives:
         for i, candidate in _aligned(words, alt).items():
-            if i in from_alts:
-                from_alts[i].append(candidate)
+            from_alts[i].append(candidate)
+    if not bad and not any(from_alts.values()):
+        return text, []
 
     def acceptable(candidate: str, word: str) -> bool:
         return candidate.lower() != word.lower() and (
@@ -171,6 +170,30 @@ def fix_text(
             )
             if scores[best] > vocab[word] - 1 and not same_context:  # không tính chính chỗ này
                 replacement[i] = best
+
+    # từ có thật nhưng sai dấu ("trò thành" thay vì "trở thành"): từ điển không bắt được, chỉ thay
+    # khi đủ hai bằng chứng - Vision cũng đọc ra phương án kia, và cụm của phương án kia có ở chỗ
+    # khác trong sách (ít nhất REAL_WORD_MIN_CONTEXT lần) còn cụm của từ gốc thì không
+    for i, word in enumerate(words):
+        if i in replacement or i in bad:
+            continue
+        if i == 0 or i + 1 == len(words):  # đầu/cuối dòng: chỉ có ngữ cảnh một phía, không đủ chắc
+            continue
+        prev, nxt = words[i - 1], words[i + 1]
+        if vocab.context(prev, word, nxt, own=True) > 0:
+            continue
+        options = {c for c in from_alts[i] if c.lower() != word.lower() and is_valid(c)}
+        # cả hai phía đều phải từng đi cùng phương án mới: "trở thành" có cả "muốn trở" lẫn "trở thành"
+        both = [
+            c
+            for c in sorted(options)
+            if vocab.context(prev, c, None, own=False) and vocab.context(None, c, nxt, own=False)
+        ]
+        if not both:
+            continue
+        best = max(both, key=lambda c: vocab.context(prev, c, nxt, own=False))
+        if vocab.context(prev, best, nxt, own=False) >= REAL_WORD_MIN_CONTEXT:
+            replacement[i] = best
 
     if not replacement:
         return text, []
