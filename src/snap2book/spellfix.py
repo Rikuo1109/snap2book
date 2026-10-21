@@ -4,10 +4,12 @@ OCR tiếng Việt hay đọc sai dấu ("dịnh" thay vì "định", "hăn" tha
 chính tả, xét các ứng viên CHỈ KHÁC DẤU (cùng bộ chữ cái), lấy từ hai nguồn:
   - các phương án đọc khác của dòng: ứng viên phụ của Vision, bản OCR ảnh trước khi làm phẳng;
   - các từ cùng bộ chữ cái đã xuất hiện trong sách (để sửa cả tên riêng: "Kõichi" → "Koichi").
-Ứng viên phải đúng chính tả hoặc xuất hiện nhiều lần trong sách. Ưu tiên ứng viên khác ít dấu nhất
-("dịnh" → "định" chứ không phải "đình"), rồi đến ứng viên xuất hiện nhiều trong sách; ứng viên chỉ lấy
-từ sách thì chỉ được khác tối đa MAX_SPELL_MARKS dấu. Chỉ thay khi ứng viên phổ biến hơn chính từ đang
-xét, nên từ đúng mà từ điển báo nhầm ("ngu") vẫn được giữ.
+Ứng viên phải đúng chính tả hoặc xuất hiện nhiều lần trong sách. Xếp hạng: trước hết ứng viên từng
+đứng cạnh đúng các từ bên cạnh ở chỗ khác trong sách ("không mãy" → "không mấy", không phải "không
+may"), rồi ứng viên khác ít dấu nhất ("dịnh" → "định", không phải "đình"), rồi ứng viên xuất hiện
+nhiều hơn. Ứng viên chỉ lấy từ sách thì chỉ được khác tối đa MAX_VOCAB_MARKS dấu. Không thay khi
+cụm chứa từ gốc lặp lại trong sách (từ điển báo nhầm, vd. "ngu ngốc"), hoặc khi ứng viên không
+phổ biến hơn chính từ đang xét.
 
 Không bao giờ thay sang từ khác chữ cái; từ đúng chính tả không bị đụng tới. Vì vậy không sửa
 được từ có thật nhưng sai ngữ cảnh ("chẳng" → "chăng").
@@ -19,6 +21,7 @@ from collections import Counter
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from difflib import SequenceMatcher
+from itertools import pairwise
 from typing import Protocol
 
 WORD = re.compile(r"[^\W\d_]+")  # chỉ chữ cái (kể cả có dấu), không số, không gạch dưới
@@ -74,10 +77,15 @@ def _match_case(word: str, like: str) -> str:
 
 
 class Vocabulary:
-    """Tần suất từ (không phân biệt hoa thường) trong sách, nhóm theo bộ chữ cái."""
+    """Tần suất từ và cặp từ liền nhau (không phân biệt hoa thường) trong sách, nhóm theo bộ chữ cái."""
 
     def __init__(self, texts: Iterable[str]):
-        self.count = Counter(w.lower() for text in texts for w in WORD.findall(text))
+        self.count: Counter[str] = Counter()
+        self.pairs: Counter[tuple[str, str]] = Counter()
+        for text in texts:
+            words = [w.lower() for w in WORD.findall(text)]
+            self.count.update(words)
+            self.pairs.update(pairwise(words))  # cặp từ liền nhau trong một dòng
         self.by_base: dict[str, list[str]] = {}
         for word in self.count:
             self.by_base.setdefault(base_form(word), []).append(word)
@@ -87,6 +95,15 @@ class Vocabulary:
 
     def variants(self, word: str) -> list[str]:
         return self.by_base.get(base_form(word), [])
+
+    def context(self, prev: str | None, word: str, nxt: str | None, own: bool) -> int:
+        """Số lần word đứng cạnh đúng các từ prev/nxt ở chỗ khác trong sách (own: trừ chính chỗ này)."""
+        w = word.lower()
+        n = 0
+        for pair in ((prev.lower(), w) if prev else None, (w, nxt.lower()) if nxt else None):
+            if pair:
+                n += max(0, self.pairs[pair] - (1 if own else 0))
+        return n
 
 
 def _aligned(words: Sequence[str], alternative: str) -> dict[int, str]:
@@ -139,9 +156,20 @@ def fix_text(
             ):
                 scores[candidate] = vocab[candidate]
         if scores:
-            # khác ít dấu nhất, rồi phổ biến nhất; hoà nhau thì giữ thứ tự gặp trước
-            best = min(scores, key=lambda c: (mark_distance(c, word), -scores[c]))
-            if scores[best] > vocab[word] - 1:  # không tính chính lần xuất hiện này của từ
+            prev = words[i - 1] if i > 0 else None
+            nxt = words[i + 1] if i + 1 < len(words) else None
+            # đứng cạnh đúng các từ này ở chỗ khác trong sách ("không mấy" chứ không "không may"),
+            # rồi khác ít dấu nhất, rồi phổ biến nhất; hoà nhau thì giữ thứ tự gặp trước
+            best = min(
+                scores,
+                key=lambda c: (-vocab.context(prev, c, nxt, own=False), mark_distance(c, word), -scores[c]),
+            )
+            # ngữ cảnh: cụm "ngu ngốc" lặp lại ở chỗ khác mà "ngủ ngốc" thì không -> từ điển thiếu
+            # chữ "ngu" chứ không phải OCR đọc sai, giữ nguyên
+            same_context = vocab.context(prev, word, nxt, own=True) > vocab.context(
+                prev, best, nxt, own=False
+            )
+            if scores[best] > vocab[word] - 1 and not same_context:  # không tính chính chỗ này
                 replacement[i] = best
 
     if not replacement:
