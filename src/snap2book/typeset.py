@@ -37,6 +37,9 @@ p.first {{ text-indent: 0; }}
 /* đoạn trích không thụt lề: lề trái dùng để nhận đầu đoạn khi ngắt trang */
 p.quote {{ text-indent: 0; font-style: italic; margin: 3pt 0; }}
 p.note {{ font-size: {NOTE_PT}pt; line-height: 1.2; text-indent: 0; }}
+p.figure {{ text-indent: 0; text-align: center; margin: 6pt 0; }}
+table {{ border-collapse: collapse; width: 100%; margin: 6pt 0; font-size: {NOTE_PT}pt; }}
+td, th {{ border: 0.5pt solid #888; padding: 1pt 3pt; text-align: left; vertical-align: top; }}
 """
 HEADING_MIN_PT = BODY_PT + 1  # dòng có chữ lớn hơn mức này là tiêu đề
 
@@ -63,16 +66,35 @@ class Row(NamedTuple):
     size: float  # cỡ chữ lớn nhất trong dòng
 
 
-def _story(body: str) -> pymupdf.Story:
-    return pymupdf.Story(html=body, user_css=CSS, archive=pymupdf.Archive(FONT_DIR))
+def _story(body: str, resources: Path | None = None) -> pymupdf.Story:
+    archive = pymupdf.Archive(FONT_DIR)
+    if resources:
+        archive.add(str(resources))  # ảnh: đường dẫn tính từ thư mục chứa file Markdown
+    return pymupdf.Story(html=body, user_css=CSS, archive=archive)
 
 
-def _book_html(book: Book) -> str:
+def _cell(text: str) -> str:
+    return NOTE_REF.sub(r"<sup>\1</sup>", html.escape(text))
+
+
+def _book_html(book: Book, resources: Path | None = None, width: float = 0) -> str:
     parts = []
     after_heading = True
     for block in book.blocks:
-        text = NOTE_REF.sub(r"<sup>\1</sup>", html.escape(block.text))
-        if block.kind in ("h1", "h2"):
+        text = _cell(block.text)
+        if block.kind == "image":
+            if resources and (resources / block.src).is_file():
+                src = html.escape(block.src)
+                parts.append(f'<p class="figure"><img src="{src}" width="{width:.0f}"/></p>')
+            after_heading = False
+        elif block.kind == "table":
+            rows = []
+            for k, row in enumerate(block.rows):
+                tag = "th" if block.header and k == 0 else "td"
+                rows.append("<tr>" + "".join(f"<{tag}>{_cell(c)}</{tag}>" for c in row) + "</tr>")
+            parts.append(f"<table>{''.join(rows)}</table>")
+            after_heading = False
+        elif block.kind in ("h1", "h2"):
             parts.append(f"<{block.kind}>{text}</{block.kind}>")
             after_heading = True
         elif block.kind == "quote":
@@ -154,13 +176,14 @@ def fix_first_bad_break(pages: list[list[Row]], limits: dict[int, float]) -> boo
 
 
 class Typesetter:
-    def __init__(self, book: Book, style: PageStyle = DEFAULT_STYLE):
+    def __init__(self, book: Book, style: PageStyle = DEFAULT_STYLE, resources: Path | None = None):
         self.book = book
         self.style = style
-        self.body = _book_html(book)
+        self.resources = resources
         self.page = pymupdf.paper_rect(style.size)
         m = style.margin
         self.content = self.page + (m, m, -m, -m - style.footer)
+        self.body = _book_html(book, resources, self.content.width)
 
     def _notes_html(self, nums: list[int]) -> str:
         return "".join(f'<p class="note">{n}. {html.escape(self.book.notes[n - 1])}</p>' for n in nums)
@@ -176,7 +199,7 @@ class Typesetter:
         notes_on[i], thân trang không xuống quá limits[i]. Trả về {trang: y vạch ngăn}."""
         c, gap = self.content, self.style.note_gap
         writer = pymupdf.DocumentWriter(target)
-        story = _story(self.body)
+        story = _story(self.body, self.resources)
         rules = {}
         page_no, more = 0, True
         while more:
@@ -249,6 +272,8 @@ class Typesetter:
             return doc.page_count
 
 
-def to_pdf(book: Book, title: str, out_path: Path, style: PageStyle = DEFAULT_STYLE) -> int:
-    """Dàn trang sách ra PDF chữ, trả về số trang."""
-    return Typesetter(book, style).write(out_path, title)
+def to_pdf(
+    book: Book, title: str, out_path: Path, style: PageStyle = DEFAULT_STYLE, resources: Path | None = None
+) -> int:
+    """Dàn trang sách ra PDF chữ, trả về số trang. resources: thư mục gốc của đường dẫn ảnh."""
+    return Typesetter(book, style, resources).write(out_path, title)

@@ -27,8 +27,12 @@ class TextLine(Protocol):
 
 @dataclass
 class Block:
-    kind: Literal["h1", "h2", "p", "quote"]  # quote: đoạn trích (vd. lá thư trong truyện)
-    text: str  # chỗ có chú thích được đánh dấu bằng note_ref(n)
+    # quote: đoạn trích (vd. lá thư trong truyện); image, table: chỉ có khi đọc từ Markdown sửa tay
+    kind: Literal["h1", "h2", "p", "quote", "image", "table"]
+    text: str  # chỗ có chú thích được đánh dấu bằng note_ref(n); với image là chú thích ảnh (alt)
+    src: str = ""  # image: đường dẫn file ảnh, tính từ thư mục chứa file Markdown
+    rows: list[list[str]] = field(default_factory=list)  # table: các ô theo hàng
+    header: bool = False  # table: hàng đầu là hàng tiêu đề
 
 
 @dataclass

@@ -78,3 +78,29 @@ def test_quote_block(tmp_path):
     assert "<blockquote><p>Thư &amp; lời nhắn.</p></blockquote>" in chap
     assert "<p>Sau thư.</p>" in chap  # đoạn sau thư thụt vào như thường
     ET.fromstring(chap)
+
+
+def test_image_and_table(tmp_path):
+    import cv2
+    import numpy as np
+
+    (tmp_path / "images").mkdir()
+    cv2.imwrite(str(tmp_path / "images" / "so-do.png"), np.zeros((20, 30), np.uint8))
+    book = Book(
+        [
+            Block("h1", "CHƯƠNG I"),
+            Block("image", "Sơ đồ", src="images/so-do.png"),
+            Block("image", "Không có", src="images/thieu.png"),
+            Block("table", "", rows=[["Ký hiệu", "Phòng"], ["a", "Phòng & Wani"]], header=True),
+        ]
+    )
+    out = tmp_path / "sach.epub"
+    to_epub(book, "S", out, resources=tmp_path)
+    zf = zipfile.ZipFile(out)
+    names = zf.namelist()
+    assert "OEBPS/images/img001.png" in names and len([n for n in names if "images/" in n]) == 1
+    chap = zf.read("OEBPS/chap001.xhtml").decode()
+    ET.fromstring(chap)
+    assert '<img src="images/img001.png" alt="Sơ đồ"/>' in chap and "thieu" not in chap
+    assert "<tr><th>Ký hiệu</th><th>Phòng</th></tr>" in chap and "<td>Phòng &amp; Wani</td>" in chap
+    assert 'href="images/img001.png" media-type="image/png"' in zf.read("OEBPS/content.opf").decode()

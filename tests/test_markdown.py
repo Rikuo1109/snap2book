@@ -88,3 +88,20 @@ def test_quote_paragraphs():
         ("p", "Hết thư."),
     ]
     assert from_markdown(to_markdown(book, "Sách"))[0] == book
+
+
+def test_image_and_table_blocks():
+    text = (
+        "# Sách\n\nTrước bảng.\n\n![Sơ đồ nhà](images/so-do.jpg)\n\n"
+        "| a | Phòng Kazuma[^1] |\n| --- | --- |\n| b | Phòng Wani |\n\n"
+        "| 1 | Phòng Akira |\n| 2 | Phòng kiểu Nhật |\nSau bảng.\n\n[^1]: Chú.\n"
+    )
+    book, _ = from_markdown(text)
+    assert [(b.kind, b.text, b.src, b.rows, b.header) for b in book.blocks] == [
+        ("p", "Trước bảng.", "", [], False),
+        ("image", "Sơ đồ nhà", "images/so-do.jpg", [], False),
+        ("table", "", "", [["a", f"Phòng Kazuma{note_ref(1)}"], ["b", "Phòng Wani"]], True),
+        ("table", "", "", [["1", "Phòng Akira"], ["2", "Phòng kiểu Nhật"]], False),
+        ("p", "Sau bảng.", "", [], False),
+    ]
+    assert from_markdown(to_markdown(book, "Sách"))[0] == book
