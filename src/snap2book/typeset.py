@@ -34,6 +34,8 @@ h1 {{ font-size: 15pt; text-align: center; margin: 0 0 2pt 0; }}
 h2 {{ font-size: 12.5pt; text-align: center; font-style: italic; font-weight: normal; margin: 0 0 8pt 0; }}
 p {{ text-indent: 1.4em; margin: 0; }}
 p.first {{ text-indent: 0; }}
+/* đoạn trích không thụt lề: lề trái dùng để nhận đầu đoạn khi ngắt trang */
+p.quote {{ text-indent: 0; font-style: italic; margin: 3pt 0; }}
 p.note {{ font-size: {NOTE_PT}pt; line-height: 1.2; text-indent: 0; }}
 """
 HEADING_MIN_PT = BODY_PT + 1  # dòng có chữ lớn hơn mức này là tiêu đề
@@ -73,6 +75,9 @@ def _book_html(book: Book) -> str:
         if block.kind in ("h1", "h2"):
             parts.append(f"<{block.kind}>{text}</{block.kind}>")
             after_heading = True
+        elif block.kind == "quote":
+            parts.append(f'<p class="quote">{text}</p>')
+            after_heading = False
         else:
             parts.append(f'<p class="first">{text}</p>' if after_heading else f"<p>{text}</p>")
             after_heading = False

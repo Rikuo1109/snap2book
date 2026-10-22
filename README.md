@@ -76,7 +76,8 @@ càng rõ, vì chi phí khởi động tiến trình (nạp OpenCV, Vision) ch�
 
 1. Chụp sách, chạy `make` → có `output/<tên>.md` và `output/<tên>.epub`.
 2. Mở `output/<tên>.md`, đối chiếu với `<tên> - scan.pdf` và sửa lỗi OCR. Giữ đúng dạng:
-   `## ` tiêu đề chương, `### ` tiêu đề phụ, các đoạn cách nhau bằng dòng trống, chú thích
+   `## ` tiêu đề chương, `### ` tiêu đề phụ, các đoạn cách nhau bằng dòng trống, `> ` đầu đoạn
+   trích (vd. lá thư trong truyện, EPUB in nghiêng và thụt lề), chú thích
    ghi `[^n]` trong bài và `[^n]: nội dung` ở cuối file (số thứ tự được đánh lại tự động).
 3. `make typeset MD="output/<tên>.md"` → ghi đè `output/<tên>.epub` bằng bản đã sửa (`PDF=1` thêm PDF).
 

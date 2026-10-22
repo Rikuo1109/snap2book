@@ -30,6 +30,8 @@ a.noteref { text-decoration: none; }
 aside.footnote { font-size: 0.85em; margin-top: 1em; }
 aside.footnote p { text-indent: 0; }
 hr.notes { width: 30%; margin: 2em 0 0.5em; }
+blockquote { margin: 0.6em 1.5em; font-style: italic; }
+blockquote p { text-indent: 0; }
 nav ol { list-style: none; padding-left: 0; }
 """
 
@@ -92,6 +94,9 @@ def _chapter_html(chapter: _Chapter, book: Book, used: set[int]) -> str:
         if block.kind in ("h1", "h2"):
             parts.append(f"<{block.kind}>{text}</{block.kind}>")
             after_heading = True
+        elif block.kind == "quote":
+            parts.append(f"<blockquote><p>{text}</p></blockquote>")
+            after_heading = False
         else:
             parts.append(f'<p class="first">{text}</p>' if after_heading else f"<p>{text}</p>")
             after_heading = False

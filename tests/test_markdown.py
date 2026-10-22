@@ -72,3 +72,19 @@ def test_cli_typeset_markdown(tmp_path):
         assert doc.metadata["title"] == "Sách"
         text = "".join(p.get_text() for p in doc).replace("\xa0", " ")
     assert "Sotori" in text and "Chú thích ba." in text
+
+
+def test_quote_paragraphs():
+    text = (
+        "# Sách\n\nTrong thư nói rằng:\n\n"
+        "> Văn phòng du lịch\n> sẽ gửi vé.\n>\n> Cầu xin[^1] mọi người.\n\n"
+        "Hết thư.\n\n[^1]: Chú.\n"
+    )
+    book, _ = from_markdown(text)
+    assert [(b.kind, b.text) for b in book.blocks] == [
+        ("p", "Trong thư nói rằng:"),
+        ("quote", "Văn phòng du lịch sẽ gửi vé."),
+        ("quote", f"Cầu xin{note_ref(1)} mọi người."),
+        ("p", "Hết thư."),
+    ]
+    assert from_markdown(to_markdown(book, "Sách"))[0] == book

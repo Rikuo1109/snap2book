@@ -5,6 +5,7 @@ Dạng Markdown:
   ## Tiêu đề chương        (h1)
   ### Tiêu đề phụ          (h2)
   Các đoạn văn cách nhau bằng dòng trống; chỗ có chú thích ghi [^n].
+  > đoạn trích               (vd. lá thư trong truyện; mỗi đoạn trích một dòng "> ...")
   [^n]: nội dung chú thích (cuối file)
 """
 
@@ -26,6 +27,8 @@ def to_markdown(book: Book, title: str) -> str:
     for block in book.blocks:
         if block.kind in _HEADING:
             out += [f"{_HEADING[block.kind]} {block.text}", ""]
+        elif block.kind == "quote":
+            out += [NOTE_REF.sub(r"[^\1]", f"> {block.text}"), ""]
         else:
             out += [NOTE_REF.sub(r"[^\1]", block.text), ""]
     out += [f"[^{i}]: {text}" for i, text in enumerate(book.notes, 1)]
@@ -34,18 +37,23 @@ def to_markdown(book: Book, title: str) -> str:
 
 def from_markdown(text: str) -> tuple[Book, str | None]:
     """Đọc lại Markdown (dạng to_markdown xuất ra, có thể đã sửa tay) thành (Book, tên sách).
-    Dòng liền nhau gộp thành một đoạn; dòng thụt vào sau [^n]: là phần tiếp của chú thích.
+    Dòng liền nhau gộp thành một đoạn; đoạn mở đầu bằng "> " là đoạn trích ("> " ở các dòng sau
+    của đoạn có hay không đều được, dòng chỉ có ">" ngăn hai đoạn trích);
+    dòng thụt vào sau [^n]: là phần tiếp của chú thích.
     Chú thích được đánh số lại theo thứ tự xuất hiện của [^n] trong bài (typeset cần vậy)."""
     title = None
     blocks: list[Block] = []
     defs: dict[str, str] = {}
     para: list[str] = []
+    quote = False  # đoạn đang đọc là đoạn trích
     note: str | None = None  # nhãn chú thích đang đọc (để nối dòng tiếp theo)
 
     def end_paragraph() -> None:
+        nonlocal quote
         if para:
-            blocks.append(Block("p", " ".join(para)))
+            blocks.append(Block("quote" if quote else "p", " ".join(para)))
             para.clear()
+        quote = False
 
     for raw in text.splitlines():
         line = raw.strip()
@@ -65,6 +73,13 @@ def from_markdown(text: str) -> tuple[Book, str | None]:
                 title = title or m[2].strip()
             else:
                 blocks.append(Block(_KIND[m[1]], m[2].strip()))
+        elif line.startswith(">"):
+            line = line[1:].strip()
+            if not line:
+                end_paragraph()
+                continue
+            quote = quote or not para
+            para.append(line)
         else:
             para.append(line)
     end_paragraph()
