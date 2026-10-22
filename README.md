@@ -37,6 +37,7 @@ Hoặc gọi trực tiếp sau khi cài (`make setup` hoặc `pip install -e .`)
 ```bash
 snap2book resources/ -o output [-j N] [--no-cache] [--scan-only] [--pdf] [--no-dewarp] [--no-spellfix] [--debug] [-v] [--keep-duplicates] [--force] [--to-books] [--to-icloud [THƯ_MỤC]] [-q]
 snap2book typeset output/sach.md [-o sach.epub] [--pdf] [--to-books] [--to-icloud [THƯ_MỤC]] [-q]
+snap2book llmfix output/sach.md [--chapter N] [-o sach.llmfix.md] [-q]
 ```
 
 Mỗi file PDF đầu vào là một cuốn; các ảnh rời `.jpg/.png/...` trong cùng thư mục, sắp theo tên,
@@ -85,6 +86,18 @@ lưu kèm mã băm vào file ẩn `output/.<tên>.md.sha256`. Lần chạy sau, 
 báo và dựng sách từ bản đã sửa (`<tên> - scan.pdf` vẫn được làm lại). File `.md` không có
 mã băm (xuất từ bản cũ) cũng được giữ lại cho chắc. Muốn ghi đè bằng bản OCR mới: thêm `--force`
 (`make run IN=... FORCE=1`).
+
+### Sửa dấu bằng Claude (tuỳ chọn)
+
+Từ điển không bắt được từ có thật nhưng sai dấu ("trò thành", "Chăng bao lâu"). Bước `llmfix`
+gửi các đoạn văn cho Claude Haiku 5.5 sửa theo ngữ cảnh. Code chỉ nhận thay đổi về dấu (cùng chữ
+cái, cùng hoa/thường, giữ nguyên dấu câu và số từ); đề xuất khác thì bị bỏ qua và in ra.
+
+1. `.venv/bin/pip install -e ".[llm]"`, chép `.env.example` thành `.env` rồi điền `ANTHROPIC_API_KEY`
+   (`.env` không được commit).
+2. `.venv/bin/snap2book llmfix "output/<tên>.md"` (thêm `--chapter 2` để thử một chương) → ghi
+   `output/<tên>.llmfix.md`, in từng từ đã sửa và chi phí (cả cuốn ~200 đoạn khoảng $0.03).
+3. Đọc lướt danh sách sửa, rồi `snap2book typeset "output/<tên>.llmfix.md" -o "output/<tên>.epub"`.
 
 ### Đọc trên iPhone
 
@@ -148,6 +161,7 @@ từ `spellfix` trở đi chạy trên cả cuốn.
 | `structure.py` | Bỏ header/footer (giữ lại số trang in), nhận tiêu đề chương, tách chú thích, nối đoạn qua các trang |
 | `pagecheck.py` | Soát số trang in: trang thiếu, chụp lặp, sai thứ tự (có tính đến OCR đọc nhầm số) |
 | `spellfix.py` | Sửa lỗi dấu OCR: từ sai chính tả được thay bằng phương án đọc khác hoặc từ cùng chữ cái trong sách (từ điển tiếng Việt của macOS) |
+| `llmfix.py` | Sửa dấu theo ngữ cảnh bằng Claude Haiku, chỉ nhận thay đổi về dấu |
 | `markdown.py` | Xuất Markdown (chú thích dạng `[^1]`) và đọc ngược lại để dàn trang bản đã sửa |
 | `epub.py` | Xuất EPUB 3: mỗi chương một file, mục lục, chú thích bật lên khi bấm số mũ |
 | `typeset.py` | Dàn trang PDF: chú thích ở chân trang có số mũ, chống dòng mồ côi |
@@ -170,7 +184,9 @@ make format     # ruff tự sửa và định dạng
 - Trang cong được kéo thẳng theo chiều dọc, nhưng chữ bị co ngang gần gáy sách thì chưa sửa;
   OCR vẫn còn sai dấu lẻ tẻ, nên đọc soát file `.md` rồi dàn lại bằng `snap2book typeset`.
 - Bước sửa dấu chỉ sửa từ không tồn tại ("dịnh" → "định"); từ có thật nhưng sai ngữ cảnh
-  ("chẳng" đọc thành "chăng") thì không. `-v` in ra từng từ đã sửa.
+  ("chẳng" đọc thành "chăng") thì chỉ sửa khi cụm đúng xuất hiện nhiều lần trong sách; còn lại dùng
+  `snap2book llmfix`. `-v` in ra từng từ đã sửa. Lỗi mất / sai chữ cái (vd. chữ bị cắt ở mép
+  trang) thì cả hai bước đều không sửa.
 - Số mũ chú thích đôi khi bị OCR đọc thành dấu nháy; script nhận dạng được trường hợp này,
   các dạng lỗi khác thì chưa. Tương tự, nháy đơn đầu đoạn ngay trước chữ hoa (`'Đương...`) được
   sửa thành ngoặc kép.
