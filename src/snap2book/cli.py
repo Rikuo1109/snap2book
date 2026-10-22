@@ -176,7 +176,7 @@ def parse_llmfix_args(argv: list[str]) -> argparse.Namespace:
 
 
 def llmfix(args: argparse.Namespace) -> None:
-    from snap2book.llmfix import claude_ask, fix_paragraphs
+    from snap2book.llmfix import claude_ask, fix_paragraphs, load_env
 
     try:
         lines = args.markdown.read_text(encoding="utf-8").split("\n")
@@ -191,6 +191,9 @@ def llmfix(args: argparse.Namespace) -> None:
             chapter = int(m[1]) if m else None
         elif line.strip() and not line.startswith(("#", "[^")) and args.chapter in (None, chapter):
             wanted.append(i)
+    load_env()
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        sys.exit("Thiếu ANTHROPIC_API_KEY: điền vào file .env (xem .env.example)")
     if not wanted:
         sys.exit(f"Không có đoạn văn nào{f' trong chương {args.chapter}' if args.chapter else ''}")
     try:

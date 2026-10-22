@@ -6,15 +6,18 @@ nhận thay đổi về dấu: mỗi từ sửa phải cùng bộ chữ cái v�
 trăng / móc, d/đ), cùng hoa/thường; dấu câu, khoảng trắng, số lượng từ phải giữ nguyên. Đoạn nào
 model trả về khác cấu trúc thì giữ nguyên bản gốc; từ nào sửa quá dấu thì giữ từ gốc.
 
-Cần gói anthropic (pip install -e ".[llm]") và ANTHROPIC_API_KEY (hoặc đã `ant auth login`).
+Cần gói anthropic (pip install -e ".[llm]") và ANTHROPIC_API_KEY: biến môi trường, hoặc ghi trong
+file .env ở thư mục chạy lệnh (xem .env.example).
 """
 
 import json
 import logging
+import os
 import re
 import unicodedata
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from snap2book.spellfix import base_form
 
@@ -129,6 +132,16 @@ def _batches(paragraphs: Sequence[str], indices: Sequence[int]) -> list[list[int
         batches[-1].append(i)
         size += len(paragraphs[i])
     return batches
+
+
+def load_env(path: Path = Path(".env")) -> None:
+    """Đọc các dòng KEY=giá trị trong .env vào biến môi trường (biến đã đặt sẵn thì giữ)."""
+    if not path.is_file():
+        return
+    for line in path.read_text(encoding="utf-8").splitlines():
+        key, sep, value = line.strip().partition("=")
+        if sep and key and not key.startswith("#") and value.strip():
+            os.environ.setdefault(key.strip(), value.strip().strip("'\""))
 
 
 Ask = Callable[[list[dict]], tuple[dict[int, str], int, int]]

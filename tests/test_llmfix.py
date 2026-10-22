@@ -51,3 +51,20 @@ def test_only_selected_paragraphs_sent_and_usage_counted():
 def test_missing_reply_keeps_original():
     result = fix_paragraphs(["Thể nhưng"], lambda items: ({}, 5, 0))
     assert result.paragraphs == ["Thể nhưng"]
+
+
+def test_load_env(tmp_path, monkeypatch):
+    from snap2book.llmfix import load_env
+
+    env = tmp_path / ".env"
+    env.write_text('# ghi chú\nSNAP2BOOK_A="khoá 1"\nSNAP2BOOK_B=\nSNAP2BOOK_C=x\n')
+    monkeypatch.delenv("SNAP2BOOK_A", raising=False)
+    monkeypatch.delenv("SNAP2BOOK_B", raising=False)
+    monkeypatch.setenv("SNAP2BOOK_C", "sẵn có")
+    load_env(env)
+    import os
+
+    assert os.environ["SNAP2BOOK_A"] == "khoá 1"
+    assert "SNAP2BOOK_B" not in os.environ  # để trống: coi như chưa điền
+    assert os.environ["SNAP2BOOK_C"] == "sẵn có"
+    monkeypatch.delenv("SNAP2BOOK_A")
