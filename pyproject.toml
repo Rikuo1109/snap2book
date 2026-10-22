@@ -18,6 +18,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest", "ruff"]
+llm = ["anthropic"]  # snap2book llmfix: sửa dấu bằng Claude
 
 [project.scripts]
 snap2book = "snap2book.cli:main"
