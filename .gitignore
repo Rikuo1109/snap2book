@@ -8,3 +8,5 @@ __pycache__/
 # ảnh chụp sách (file lớn, có bản quyền) - không commit
 resources/*
 !resources/.gitkeep
+# khoá API (bí mật) - không commit
+.env

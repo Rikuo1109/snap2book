@@ -3,6 +3,8 @@
             [--no-dewarp] [--no-spellfix] [--debug] [--force] [--to-books] [--to-icloud [thư_mục]]
   snap2book typeset <file .md> [-o file.epub] [--pdf] [--to-books] [--to-icloud [thư_mục]]
                                                     dựng lại sách từ Markdown đã sửa
+  snap2book llmfix <file .md> [--chapter N] [-o file.md]
+                                                    sửa dấu bằng Claude Haiku (cần ANTHROPIC_API_KEY)
 
 Mỗi file PDF đầu vào (vd. PDF từ app scan của iPhone) là một cuốn sách; các ảnh rời
 .jpg/.png trong cùng thư mục (sắp theo tên) gộp thành một cuốn; mỗi thư mục con cũng là một cuốn.
@@ -30,6 +32,7 @@ snap2book/Sách đã xử lý); trên iPhone mở bằng app Tệp, hoặc Chia 
 import argparse
 import logging
 import os
+import re
 import sys
 import warnings
 from pathlib import Path
@@ -160,10 +163,70 @@ def typeset(args: argparse.Namespace) -> None:
     _deliver(files, args)
 
 
+def parse_llmfix_args(argv: list[str]) -> argparse.Namespace:
+    ap = argparse.ArgumentParser(
+        prog="snap2book llmfix",
+        description="Sửa lỗi dấu OCR trong file Markdown bằng Claude Haiku: chỉ đổi dấu, không đổi chữ.",
+    )
+    ap.add_argument("markdown", type=Path, help="file .md (dạng snap2book xuất ra)")
+    ap.add_argument("--chapter", type=_positive_int, help="chỉ sửa chương này (số N trong '## Chương N')")
+    ap.add_argument("-o", "--output", type=Path, help="file .md ra (mặc định: <tên>.llmfix.md cạnh file vào)")
+    ap.add_argument("-q", "--quiet", action="store_true", help="chỉ in lỗi")
+    return ap.parse_args(argv)
+
+
+def llmfix(args: argparse.Namespace) -> None:
+    from snap2book.llmfix import claude_ask, fix_paragraphs, load_env
+
+    try:
+        lines = args.markdown.read_text(encoding="utf-8").split("\n")
+    except FileNotFoundError:
+        sys.exit(f"Không tìm thấy: {args.markdown}")
+    # dòng văn: không phải tiêu đề, chú thích ([^n]: ...) hay dòng trống
+    chapter = None
+    wanted = []
+    for i, line in enumerate(lines):
+        if line.startswith("## "):
+            m = re.fullmatch(r"## Chương (\d+)", line.strip())
+            chapter = int(m[1]) if m else None
+        elif line.strip() and not line.startswith(("#", "[^")) and args.chapter in (None, chapter):
+            wanted.append(i)
+    load_env()
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        sys.exit("Thiếu ANTHROPIC_API_KEY: điền vào file .env (xem .env.example)")
+    if not wanted:
+        sys.exit(f"Không có đoạn văn nào{f' trong chương {args.chapter}' if args.chapter else ''}")
+    try:
+        result = fix_paragraphs(lines, claude_ask(), wanted)
+    except ImportError:
+        sys.exit('Cần gói anthropic: .venv/bin/pip install -e ".[llm]"')
+    for c in result.changes:
+        logging.info("  dòng %d: %s → %s", c.paragraph + 1, c.before, c.after)
+    for i, before, after in result.rejected:
+        logging.info("  dòng %d: bỏ qua đề xuất không chỉ đổi dấu: %s → %s", i + 1, before[:60], after[:60])
+    out = args.output or args.markdown.with_suffix(".llmfix.md")
+    out.write_text("\n".join(result.paragraphs), encoding="utf-8")
+    u = result.usage
+    logging.info(
+        "=> %s: %d từ sửa dấu trong %d đoạn; %d lần gọi, %d token vào, %d token ra, ~$%.4f",
+        out,
+        len(result.changes),
+        len(wanted),
+        u.calls,
+        u.input_tokens,
+        u.output_tokens,
+        u.cost,
+    )
+
+
 def main(argv: list[str] | None = None) -> None:
     argv = sys.argv[1:] if argv is None else argv
-    is_typeset = argv[:1] == ["typeset"]
-    args = parse_typeset_args(argv[1:]) if is_typeset else parse_args(argv)
+    command = argv[0] if argv[:1] in (["typeset"], ["llmfix"]) else None
+    is_typeset = command == "typeset"
+    if command == "llmfix":
+        args = parse_llmfix_args(argv[1:])
+    else:
+        args = parse_typeset_args(argv[1:]) if is_typeset else parse_args(argv)
     level = (
         logging.WARNING if args.quiet else logging.DEBUG if getattr(args, "verbose", False) else logging.INFO
     )
@@ -171,6 +234,10 @@ def main(argv: list[str] | None = None) -> None:
     warnings.filterwarnings("ignore", category=FutureWarning, module="pymupdf")
     if is_typeset:
         typeset(args)
+        return
+    if command == "llmfix":
+        logging.getLogger("httpx2").setLevel(logging.WARNING)  # không in từng request
+        llmfix(args)
         return
 
     try:
