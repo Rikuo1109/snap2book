@@ -236,7 +236,7 @@ def main(argv: list[str] | None = None) -> None:
         typeset(args)
         return
     if command == "llmfix":
-        logging.getLogger("httpx").setLevel(logging.WARNING)  # không in từng request
+        logging.getLogger("httpx2").setLevel(logging.WARNING)  # không in từng request
         llmfix(args)
         return
 
