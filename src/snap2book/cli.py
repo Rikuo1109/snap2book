@@ -187,7 +187,7 @@ def llmfix(args: argparse.Namespace) -> None:
     wanted = []
     for i, line in enumerate(lines):
         if line.startswith("## "):
-            m = re.fullmatch(r"## Chương (\d+)", line.strip())
+            m = re.match(r"## Chương (\d+)\b", line.strip())  # "## Chương 4" hoặc "## Chương 4 - Tên chương"
             chapter = int(m[1]) if m else None
         elif line.strip() and not line.startswith(("#", "[^")) and args.chapter in (None, chapter):
             wanted.append(i)

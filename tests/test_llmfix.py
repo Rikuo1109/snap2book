@@ -68,3 +68,16 @@ def test_load_env(tmp_path, monkeypatch):
     assert "SNAP2BOOK_B" not in os.environ  # để trống: coi như chưa điền
     assert os.environ["SNAP2BOOK_C"] == "sẵn có"
     monkeypatch.delenv("SNAP2BOOK_A")
+
+
+def test_cli_chapter_with_title(tmp_path, monkeypatch):
+    import snap2book.llmfix
+    from snap2book.cli import main
+
+    md = tmp_path / "sach.md"
+    md.write_text("# Sách\n\n## Chương 1\n\nThể nhưng.\n\n## Chương 2 - Tên chương\n\nThể nhưng.\n")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test")
+    monkeypatch.setattr(snap2book.llmfix, "claude_ask", lambda: fake_ask({"Thể nhưng.": "Thế nhưng."}))
+    main(["llmfix", str(md), "--chapter", "2", "-o", str(tmp_path / "ra.md")])
+    out = (tmp_path / "ra.md").read_text()
+    assert out == "# Sách\n\n## Chương 1\n\nThể nhưng.\n\n## Chương 2 - Tên chương\n\nThế nhưng.\n"
