@@ -78,10 +78,10 @@ càng rõ, vì chi phí khởi động tiến trình (nạp OpenCV, Vision) ch�
 2. Mở `output/<tên>.md`, đối chiếu với `<tên> - scan.pdf` và sửa lỗi OCR. Giữ đúng dạng:
    `## ` tiêu đề chương, `### ` tiêu đề phụ, các đoạn cách nhau bằng dòng trống, `> ` đầu đoạn
    trích (vd. lá thư trong truyện, EPUB in nghiêng và thụt lề), chú thích
-   - Ảnh / bảng trong sách (OCR không đọc được) thì thêm tay: `![chú thích](images/so-do.jpg)`
+   ghi `[^n]` trong bài và `[^n]: nội dung` ở cuối file (số thứ tự được đánh lại tự động).
+   Ảnh / bảng trong sách (OCR không đọc được) thì thêm tay: `![chú thích](images/so-do.jpg)`
      (đường dẫn tính từ thư mục chứa file .md, ảnh .jpg/.png được nhúng vào EPUB) và bảng
      `| ô | ô |` mỗi hàng một dòng (thêm `| --- | --- |` sau hàng đầu nếu hàng đầu là tiêu đề).
-   ghi `[^n]` trong bài và `[^n]: nội dung` ở cuối file (số thứ tự được đánh lại tự động).
 3. `make typeset MD="output/<tên>.md"` → ghi đè `output/<tên>.epub` bằng bản đã sửa (`PDF=1` thêm PDF).
 
 Chạy lại `make` trên cùng cuốn sách không làm mất phần đã sửa: mỗi lần ghi `<tên>.md`, script
