@@ -75,3 +75,22 @@ def test_quote_block_typeset(tmp_path):
         spans = [s for b in doc[0].get_text("dict")["blocks"] for ln in b["lines"] for s in ln["spans"]]
     quote = next(s for s in spans if "Cầu xin" in s["text"].replace("\xa0", " "))
     assert quote["flags"] & pymupdf.TEXT_FONT_ITALIC
+
+
+def test_image_and_table_typeset(tmp_path):
+    import cv2
+    import numpy as np
+
+    cv2.imwrite(str(tmp_path / "so-do.png"), np.full((40, 60), 128, np.uint8))
+    book = Book(
+        [
+            Block("h1", "CHƯƠNG I"),
+            Block("image", "Sơ đồ", src="so-do.png"),
+            Block("table", "", rows=[["a", "Phòng Kazuma"], ["b", "Phòng Wani"]]),
+        ]
+    )
+    out = tmp_path / "sach.pdf"
+    to_pdf(book, "Sách", out, resources=tmp_path)
+    with pymupdf.open(out) as doc:
+        assert doc[0].get_images()
+        assert "Phòng Kazuma" in doc[0].get_text().replace("\xa0", " ")

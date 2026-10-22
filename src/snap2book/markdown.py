@@ -6,6 +6,8 @@ Dạng Markdown:
   ### Tiêu đề phụ          (h2)
   Các đoạn văn cách nhau bằng dòng trống; chỗ có chú thích ghi [^n].
   > đoạn trích               (vd. lá thư trong truyện; mỗi đoạn trích một dòng "> ...")
+  ![chú thích ảnh](images/so-do.jpg)   ảnh (đường dẫn tính từ thư mục chứa file .md)
+  | ô | ô |                  bảng, mỗi hàng một dòng; dòng | --- | --- | sau hàng đầu: hàng đầu là tiêu đề
   [^n]: nội dung chú thích (cuối file)
 """
 
@@ -20,6 +22,22 @@ _KIND = {v: k for k, v in _HEADING.items()}
 _HEADING_LINE = re.compile(r"(#{1,3})\s+(.*)")
 _FOOTNOTE_REF = re.compile(r"\[\^(\w+)\](?!:)")
 _FOOTNOTE_DEF = re.compile(r"\[\^(\w+)\]:\s*(.*)")
+_IMAGE = re.compile(r"!\[(.*?)\]\((.+?)\)")
+_TABLE_SEP = re.compile(r":?-{3,}:?")
+
+
+def _cells(line: str) -> list[str]:
+    return [c.strip() for c in line.strip().strip("|").split("|")]
+
+
+def _table_markdown(block: Block) -> list[str]:
+    rows = []
+    for row in block.rows:
+        cells = [NOTE_REF.sub(r"[^\1]", c) for c in row]
+        rows.append("| " + " | ".join(cells) + " |")
+    if block.header and rows:
+        rows.insert(1, "|" + " --- |" * len(block.rows[0]))
+    return rows
 
 
 def to_markdown(book: Book, title: str) -> str:
@@ -29,6 +47,10 @@ def to_markdown(book: Book, title: str) -> str:
             out += [f"{_HEADING[block.kind]} {block.text}", ""]
         elif block.kind == "quote":
             out += [NOTE_REF.sub(r"[^\1]", f"> {block.text}"), ""]
+        elif block.kind == "image":
+            out += [f"![{block.text}]({block.src})", ""]
+        elif block.kind == "table":
+            out += [*_table_markdown(block), ""]
         else:
             out += [NOTE_REF.sub(r"[^\1]", block.text), ""]
     out += [f"[^{i}]: {text}" for i, text in enumerate(book.notes, 1)]
@@ -46,10 +68,16 @@ def from_markdown(text: str) -> tuple[Book, str | None]:
     defs: dict[str, str] = {}
     para: list[str] = []
     quote = False  # đoạn đang đọc là đoạn trích
+    table: list[str] = []  # các dòng của bảng đang đọc
     note: str | None = None  # nhãn chú thích đang đọc (để nối dòng tiếp theo)
 
     def end_paragraph() -> None:
         nonlocal quote
+        if table:
+            rows = [_cells(t) for t in table]
+            header = len(rows) > 1 and all(_TABLE_SEP.fullmatch(c) for c in rows[1])
+            blocks.append(Block("table", "", rows=rows[:1] + rows[2:] if header else rows, header=header))
+            table.clear()
         if para:
             blocks.append(Block("quote" if quote else "p", " ".join(para)))
             para.clear()
@@ -73,6 +101,13 @@ def from_markdown(text: str) -> tuple[Book, str | None]:
                 title = title or m[2].strip()
             else:
                 blocks.append(Block(_KIND[m[1]], m[2].strip()))
+        elif line.startswith("|"):
+            if para:
+                end_paragraph()
+            table.append(line)
+        elif (m := _IMAGE.fullmatch(line)) and not para:
+            end_paragraph()
+            blocks.append(Block("image", m[1].strip(), src=m[2].strip()))
         elif line.startswith(">"):
             line = line[1:].strip()
             if not line:
@@ -81,6 +116,8 @@ def from_markdown(text: str) -> tuple[Book, str | None]:
             quote = quote or not para
             para.append(line)
         else:
+            if table:
+                end_paragraph()
             para.append(line)
     end_paragraph()
 
@@ -96,6 +133,7 @@ def from_markdown(text: str) -> tuple[Book, str | None]:
 
     for block in blocks:
         block.text = _FOOTNOTE_REF.sub(renumber, block.text)
+        block.rows = [[_FOOTNOTE_REF.sub(renumber, c) for c in row] for row in block.rows]
     for label in defs:  # chú thích không được tham chiếu: giữ ở cuối
         order.setdefault(label, len(order) + 1)
     notes = [defs[label] for label in sorted(order, key=order.get)]

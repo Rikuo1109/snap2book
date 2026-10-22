@@ -53,3 +53,30 @@ def test_outputs_books_prefers_text_outputs(tmp_path):
     out.markdown = out.epub = None  # chế độ chỉ-ảnh
     assert not out.wants_text()
     assert [p.name for p in out.books()] == ["Sách - scan.pdf"]
+
+
+def test_cover_file_comes_first(tmp_path):
+    book = tmp_path / "Vụ án"
+    parts = [touch(book / n) for n in ("1.pdf", "2.pdf", "cover.pdf")]
+    assert dict(find_jobs(tmp_path)) == {"Vụ án": [parts[2], parts[0], parts[1]]}
+
+
+def test_save_cover_images(tmp_path):
+    import cv2
+    import numpy as np
+    import pymupdf
+
+    from snap2book.sources import save_cover_images
+
+    img = np.zeros((300, 200, 3), np.uint8)
+    img[:, :, 2] = 200  # đỏ (BGR)
+    ok, data = cv2.imencode(".png", img)
+    doc = pymupdf.open()
+    for _ in range(2):
+        page = doc.new_page(width=200, height=300)
+        page.insert_image(page.rect, stream=data.tobytes())
+    doc.save(tmp_path / "cover.pdf")
+    saved = save_cover_images(tmp_path / "cover.pdf", tmp_path / "images")
+    assert [p.name for p in saved] == ["cover-1.jpg", "cover-2.jpg"]
+    out = cv2.imread(str(saved[0]))
+    assert max(out.shape[:2]) <= 1600 and out[150, 100, 2] > 150 and out[150, 100, 0] < 60  # giữ màu

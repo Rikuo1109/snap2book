@@ -42,6 +42,8 @@ snap2book llmfix output/sach.md [--chapter N] [-o sach.llmfix.md] [-q]
 
 Mỗi file PDF đầu vào là một cuốn; các ảnh rời `.jpg/.png/...` trong cùng thư mục, sắp theo tên,
 gộp thành một cuốn; mỗi thư mục con cũng là một cuốn (gộp mọi PDF/ảnh trong đó theo tên).
+Trong thư mục sách, file `cover.pdf` (hoặc `cover.jpg`) là bìa, không đem OCR: trang đầu làm ảnh
+bìa EPUB (app Sách hiện ở thư viện), các trang sau (vd. sơ đồ nhân vật) là ảnh ở đầu sách.
 
 Sau OCR, script đọc số trang in ở header/footer để cảnh báo trang bị thiếu, trang chụp 2 lần
 hoặc ảnh sai thứ tự. Trang chụp 2 lần liền nhau chỉ giữ ảnh đọc được nhiều dòng hơn
@@ -79,6 +81,9 @@ càng rõ, vì chi phí khởi động tiến trình (nạp OpenCV, Vision) ch�
    `## ` tiêu đề chương, `### ` tiêu đề phụ, các đoạn cách nhau bằng dòng trống, `> ` đầu đoạn
    trích (vd. lá thư trong truyện, EPUB in nghiêng và thụt lề), chú thích
    ghi `[^n]` trong bài và `[^n]: nội dung` ở cuối file (số thứ tự được đánh lại tự động).
+   Ảnh / bảng trong sách (OCR không đọc được) thì thêm tay: `![chú thích](images/so-do.jpg)`
+   (đường dẫn tính từ thư mục chứa file .md, ảnh .jpg/.png được nhúng vào EPUB) và bảng
+   `| ô | ô |` mỗi hàng một dòng (thêm `| --- | --- |` sau hàng đầu nếu hàng đầu là tiêu đề).
 3. `make typeset MD="output/<tên>.md"` → ghi đè `output/<tên>.epub` bằng bản đã sửa (`PDF=1` thêm PDF).
 
 Chạy lại `make` trên cùng cuốn sách không làm mất phần đã sửa: mỗi lần ghi `<tên>.md`, script

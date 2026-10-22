@@ -152,13 +152,14 @@ def typeset(args: argparse.Namespace) -> None:
         sys.exit(f"{args.markdown}: {e}")
     epub = (args.output or args.markdown).with_suffix(".epub")
     title = title or args.markdown.stem
-    logging.info("=> %s (%d chương)", epub, to_epub(book, title, epub))
+    resources = args.markdown.parent  # ảnh trong .md tính từ thư mục chứa nó
+    logging.info("=> %s (%d chương)", epub, to_epub(book, title, epub, resources=resources))
     files = [epub]
     if args.pdf:
         from snap2book.typeset import to_pdf
 
         pdf = epub.with_suffix(".pdf")
-        logging.info("=> %s (%d trang)", pdf, to_pdf(book, title, pdf))
+        logging.info("=> %s (%d trang)", pdf, to_pdf(book, title, pdf, resources=resources))
         files.append(pdf)
     _deliver(files, args)
 
@@ -189,7 +190,7 @@ def llmfix(args: argparse.Namespace) -> None:
         if line.startswith("## "):
             m = re.match(r"## Chương (\d+)\b", line.strip())  # "## Chương 4" hoặc "## Chương 4 - Tên chương"
             chapter = int(m[1]) if m else None
-        elif line.strip() and not line.startswith(("#", "[^")) and args.chapter in (None, chapter):
+        elif line.strip() and not line.startswith(("#", "[^", "|", "![")) and args.chapter in (None, chapter):
             wanted.append(i)
     load_env()
     if not os.environ.get("ANTHROPIC_API_KEY"):

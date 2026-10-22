@@ -24,7 +24,7 @@ def make_book():
 
 def read(path):
     zf = zipfile.ZipFile(path)
-    return zf, {name: zf.read(name).decode() for name in zf.namelist()}
+    return zf, {name: zf.read(name).decode() for name in zf.namelist() if "images/" not in name}
 
 
 def test_container_layout_and_valid_xml(tmp_path):
@@ -78,3 +78,58 @@ def test_quote_block(tmp_path):
     assert "<blockquote><p>Thư &amp; lời nhắn.</p></blockquote>" in chap
     assert "<p>Sau thư.</p>" in chap  # đoạn sau thư thụt vào như thường
     ET.fromstring(chap)
+
+
+def test_image_and_table(tmp_path):
+    import cv2
+    import numpy as np
+
+    (tmp_path / "images").mkdir()
+    cv2.imwrite(str(tmp_path / "images" / "so-do.png"), np.zeros((20, 30), np.uint8))
+    book = Book(
+        [
+            Block("h1", "CHƯƠNG I"),
+            Block("image", "Sơ đồ", src="images/so-do.png"),
+            Block("image", "Không có", src="images/thieu.png"),
+            Block("table", "", rows=[["Ký hiệu", "Phòng"], ["a", "Phòng & Wani"]], header=True),
+        ]
+    )
+    out = tmp_path / "sach.epub"
+    to_epub(book, "S", out, resources=tmp_path)
+    zf = zipfile.ZipFile(out)
+    names = zf.namelist()
+    assert "OEBPS/images/img001.png" in names and len([n for n in names if "images/" in n]) == 1
+    chap = zf.read("OEBPS/chap001.xhtml").decode()
+    ET.fromstring(chap)
+    assert '<img src="images/img001.png" alt="Sơ đồ"/>' in chap and "thieu" not in chap
+    assert "<tr><th>Ký hiệu</th><th>Phòng</th></tr>" in chap and "<td>Phòng &amp; Wani</td>" in chap
+    assert 'href="images/img001.png" media-type="image/png"' in zf.read("OEBPS/content.opf").decode()
+
+
+def test_cover_page(tmp_path):
+    import cv2
+    import numpy as np
+
+    from snap2book.epub import COVER_ALT
+
+    for name in ("bia.jpg", "mo-dau.jpg"):
+        cv2.imwrite(str(tmp_path / name), np.zeros((30, 20, 3), np.uint8))
+    book = Book(
+        [
+            Block("image", COVER_ALT, src="bia.jpg"),
+            Block("image", "", src="mo-dau.jpg"),
+            Block("h1", "CHƯƠNG I"),
+            Block("p", "Nội dung."),
+        ]
+    )
+    out = tmp_path / "sach.epub"
+    assert to_epub(book, "Sách", out, resources=tmp_path) == 2  # trang mở đầu + chương I
+    _, files = read(out)
+    opf = files["OEBPS/content.opf"]
+    assert 'href="images/img001.jpg" media-type="image/jpeg" properties="cover-image"' in opf
+    assert '<meta name="cover" content="img001"/>' in opf
+    assert opf.index('idref="cover"') < opf.index('idref="chap001"')
+    assert 'src="images/img001.jpg"' in files["OEBPS/cover.xhtml"]
+    assert "img001" not in files["OEBPS/chap001.xhtml"] and "img002" in files["OEBPS/chap001.xhtml"]
+    ET.fromstring(files["OEBPS/cover.xhtml"])
+    ET.fromstring(opf)
