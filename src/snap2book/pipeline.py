@@ -10,10 +10,10 @@ from typing import TYPE_CHECKING
 from snap2book.cache import PageCache
 from snap2book.pages import PageTask, Settings, process_pages
 from snap2book.scan_pdf import write_scan_pdf
-from snap2book.sources import load_images
+from snap2book.sources import is_cover, load_images, save_cover_images
 
 if TYPE_CHECKING:
-    from snap2book.structure import Book
+    from snap2book.structure import Block, Book
 
 log = logging.getLogger(__name__)
 
@@ -63,9 +63,13 @@ def convert(
     flatten: làm phẳng trang cong. spellfix: sửa lỗi dấu theo từ điển chính tả.
     jobs: số tiến trình xử lý trang song song (mặc định: số nhân CPU).
     cache_dir: thư mục cache kết quả từng trang (None: không dùng cache).
-    force: ghi đè cả file .md đã sửa tay (mặc định giữ lại, bản OCR mới ghi ra <tên>.ocr.md)."""
+    force: ghi đè cả file .md đã sửa tay (mặc định giữ lại, bản OCR mới ghi ra <tên>.ocr.md).
+    File bìa (cover.pdf / cover.jpg) không OCR: trang đầu là bìa EPUB, các trang sau là ảnh ở
+    đầu sách."""
     if debug_dir:
         debug_dir.mkdir(parents=True, exist_ok=True)
+    covers = [p for p in inputs if is_cover(p)]
+    inputs = [p for p in inputs if not is_cover(p)]
 
     def tasks() -> Iterator[PageTask]:
         idx = 0
@@ -133,7 +137,10 @@ def convert(
         log.info("  sửa dấu: %d từ", sum(len(c) for c in per_page))
 
     book = build_book(lines)
-    title = next(p for p in (outputs.epub, outputs.markdown, outputs.text_pdf) if p).stem
+    first_out = next(p for p in (outputs.epub, outputs.markdown, outputs.text_pdf) if p)
+    title, out_dir = first_out.stem, first_out.parent
+    if covers:
+        book.blocks[:0] = _cover_blocks(covers, out_dir, title)
 
     if outputs.markdown:
         written = save_markdown(outputs.markdown, to_markdown(book, title), force)
@@ -143,12 +150,26 @@ def convert(
     if outputs.epub:
         from snap2book.epub import to_epub
 
-        chapters = to_epub(book, title, outputs.epub)
+        chapters = to_epub(book, title, outputs.epub, resources=out_dir)
         log.info("=> %s (%d chương, từ %d trang chụp)", outputs.epub, chapters, len(pages))
     if outputs.text_pdf:
-        n = to_pdf(book, title, outputs.text_pdf)
+        n = to_pdf(book, title, outputs.text_pdf, resources=out_dir)
         log.info("=> %s (%d trang)", outputs.text_pdf, n)
     return outputs
+
+
+def _cover_blocks(covers: Sequence[Path], out_dir: Path, name: str) -> list["Block"]:
+    """Lưu ảnh bìa vào <thư mục ra>/images/<tên>/ và trả về các khối ảnh đặt ở đầu sách:
+    ảnh đầu tiên là bìa (chú thích COVER_ALT), các ảnh sau là trang ảnh mở đầu."""
+    from snap2book.epub import COVER_ALT
+    from snap2book.structure import Block
+
+    paths = [p for cover in covers for p in save_cover_images(cover, out_dir / "images" / name)]
+    log.info("  bìa: %d ảnh", len(paths))
+    return [
+        Block("image", COVER_ALT if i == 0 else "", src=p.relative_to(out_dir).as_posix())
+        for i, p in enumerate(paths)
+    ]
 
 
 def _edited_book(md: Path, ocr_md: Path, book: "Book", title: str) -> tuple["Book", str]:

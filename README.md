@@ -42,6 +42,8 @@ snap2book llmfix output/sach.md [--chapter N] [-o sach.llmfix.md] [-q]
 
 Mỗi file PDF đầu vào là một cuốn; các ảnh rời `.jpg/.png/...` trong cùng thư mục, sắp theo tên,
 gộp thành một cuốn; mỗi thư mục con cũng là một cuốn (gộp mọi PDF/ảnh trong đó theo tên).
+Trong thư mục sách, file `cover.pdf` (hoặc `cover.jpg`) là bìa, không đem OCR: trang đầu làm ảnh
+bìa EPUB (app Sách hiện ở thư viện), các trang sau (vd. sơ đồ nhân vật) là ảnh ở đầu sách.
 
 Sau OCR, script đọc số trang in ở header/footer để cảnh báo trang bị thiếu, trang chụp 2 lần
 hoặc ảnh sai thứ tự. Trang chụp 2 lần liền nhau chỉ giữ ảnh đọc được nhiều dòng hơn

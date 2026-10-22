@@ -2,7 +2,8 @@
 chỉnh được cỡ chữ, có mục lục theo chương và chú thích bật lên khi bấm vào số mũ.
 
 Mỗi chương (Block h1) là một file XHTML; phần trước chương đầu tiên (nếu có) là một file riêng.
-Ảnh (Block image) được chép vào OEBPS/images/; bảng (Block table) thành <table>.
+Ảnh (Block image) được chép vào OEBPS/images/; bảng (Block table) thành <table>. Ảnh đầu sách có
+chú thích COVER_ALT là bìa: trang riêng đầu tiên, đánh dấu cover-image (app Sách hiện làm bìa).
 Chú thích nằm cuối chương có số mũ trỏ tới nó (epub:type="footnote"); chú thích không có số
 mũ nào trỏ tới thì gom cuối sách. File tạo ra không phụ thuộc thời điểm chạy (trừ khi truyền
 modified), để chạy lại cùng nội dung thì cùng file.
@@ -21,6 +22,7 @@ from snap2book.structure import NOTE_REF, Block, Book
 log = logging.getLogger(__name__)
 
 LANGUAGE = "vi"
+COVER_ALT = "Bìa"  # ![Bìa](...) ở đầu file Markdown: ảnh bìa
 FIXED_TIME = (2020, 1, 1, 0, 0, 0)  # giờ ghi vào các mục trong file zip
 FIXED_MODIFIED = "2020-01-01T00:00:00Z"
 
@@ -38,6 +40,8 @@ blockquote { margin: 0.6em 1.5em; font-style: italic; }
 blockquote p { text-indent: 0; }
 nav ol { list-style: none; padding-left: 0; }
 figure { margin: 1em 0; text-align: center; }
+div.cover { text-align: center; margin: 0; }
+div.cover img { max-width: 100%; max-height: 100vh; }
 figure img { max-width: 100%; }
 figcaption { font-size: 0.85em; font-style: italic; }
 table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: 0.85em; }
@@ -162,23 +166,37 @@ def _nav(title: str, chapters: list[_Chapter]) -> str:
     return _xhtml(title, body)
 
 
-def _opf(title: str, chapters: list[_Chapter], modified: str, images: dict[str, str]) -> str:
+def _cover_page(title: str, name: str) -> str:
+    body = f'<div class="cover"><img src="{name}" alt="{html.escape(COVER_ALT)}"/></div>'
+    return _xhtml(title, body)
+
+
+def _opf(
+    title: str, chapters: list[_Chapter], modified: str, images: dict[str, str], cover: str | None
+) -> str:
     book_id = uuid.uuid5(uuid.NAMESPACE_URL, f"snap2book:{title}")
     items = "\n".join(
         f'    <item id="chap{i:03d}" href="chap{i:03d}.xhtml" media-type="application/xhtml+xml"/>'
         for i in range(1, len(chapters) + 1)
     )
+    cover_meta = ""
     for k, name in enumerate(images.values(), 1):
         media = MEDIA_TYPES[Path(name).suffix]
-        items += f'\n    <item id="img{k:03d}" href="{name}" media-type="{media}"/>'
+        props = ' properties="cover-image"' if name == cover else ""
+        items += f'\n    <item id="img{k:03d}" href="{name}" media-type="{media}"{props}/>'
+        if name == cover:
+            cover_meta = f'\n    <meta name="cover" content="img{k:03d}"/>'  # cho app đọc EPUB 2
     spine = "\n".join(f'    <itemref idref="chap{i:03d}"/>' for i in range(1, len(chapters) + 1))
+    if cover:
+        items += '\n    <item id="cover" href="cover.xhtml" media-type="application/xhtml+xml"/>'
+        spine = '    <itemref idref="cover"/>\n' + spine
     return f"""<?xml version="1.0" encoding="utf-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid" xml:lang="{LANGUAGE}">
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
     <dc:identifier id="bookid">urn:uuid:{book_id}</dc:identifier>
     <dc:title>{html.escape(title)}</dc:title>
     <dc:language>{LANGUAGE}</dc:language>
-    <meta property="dcterms:modified">{modified}</meta>
+    <meta property="dcterms:modified">{modified}</meta>{cover_meta}
   </metadata>
   <manifest>
     <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
@@ -206,9 +224,14 @@ def to_epub(
 ) -> int:
     """Ghi sách ra EPUB 3, trả về số chương. resources: thư mục gốc của đường dẫn ảnh (thư mục
     chứa file Markdown)."""
-    chapters = _chapters(book, title)
     files_in = _images(book, resources)
     images = {src: _image_name(i, path) for i, (src, path) in enumerate(files_in.items(), 1)}
+    first = book.blocks[0] if book.blocks else None
+    cover = None
+    if first and first.kind == "image" and first.text == COVER_ALT and first.src in images:
+        cover = images[first.src]
+        book = Book(book.blocks[1:], book.notes)
+    chapters = _chapters(book, title)
     used: set[int] = set()
     bodies = [_chapter_html(c, book, used, images) for c in chapters]
     leftover = [n for n in range(1, len(book.notes) + 1) if n not in used]
@@ -218,10 +241,12 @@ def to_epub(
 
     files = {
         "META-INF/container.xml": CONTAINER,
-        "OEBPS/content.opf": _opf(title, chapters, stamp, images),
+        "OEBPS/content.opf": _opf(title, chapters, stamp, images, cover),
         "OEBPS/nav.xhtml": _nav(title, chapters),
         "OEBPS/style.css": CSS,
     }
+    if cover:
+        files["OEBPS/cover.xhtml"] = _cover_page(title, cover)
     for i, (chapter, body) in enumerate(zip(chapters, bodies, strict=True), 1):
         files[f"OEBPS/chap{i:03d}.xhtml"] = _xhtml(chapter.label, body)
 
