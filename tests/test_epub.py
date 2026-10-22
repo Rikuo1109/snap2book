@@ -67,3 +67,14 @@ def test_deterministic(tmp_path):
 def test_book_without_headings_is_one_chapter(tmp_path):
     out = tmp_path / "sach.epub"
     assert to_epub(Book([Block("p", "Chỉ một đoạn.")]), "Sách", out) == 1
+
+
+def test_quote_block(tmp_path):
+    out = tmp_path / "sach.epub"
+    to_epub(
+        Book([Block("h1", "CHƯƠNG I"), Block("quote", "Thư & lời nhắn."), Block("p", "Sau thư.")]), "S", out
+    )
+    chap = read(out)[1]["OEBPS/chap001.xhtml"]
+    assert "<blockquote><p>Thư &amp; lời nhắn.</p></blockquote>" in chap
+    assert "<p>Sau thư.</p>" in chap  # đoạn sau thư thụt vào như thường
+    ET.fromstring(chap)

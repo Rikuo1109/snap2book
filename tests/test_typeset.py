@@ -63,3 +63,15 @@ def test_footnote_on_same_page_as_reference(tmp_path):
         ref_page = next(i for i, t in enumerate(pages) if "Sotori" in t)
         note_page = next(i for i, t in enumerate(pages) if "truyền thuyết Nhật" in t)
         assert ref_page == note_page
+
+
+def test_quote_block_typeset(tmp_path):
+    book = Book(
+        [Block("h1", "CHƯƠNG I"), Block("p", "Trong thư nói rằng:"), Block("quote", "Cầu xin mọi người.")]
+    )
+    out = tmp_path / "sach.pdf"
+    to_pdf(book, "Sách", out)
+    with pymupdf.open(out) as doc:
+        spans = [s for b in doc[0].get_text("dict")["blocks"] for ln in b["lines"] for s in ln["spans"]]
+    quote = next(s for s in spans if "Cầu xin" in s["text"].replace("\xa0", " "))
+    assert quote["flags"] & pymupdf.TEXT_FONT_ITALIC

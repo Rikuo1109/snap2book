@@ -27,7 +27,7 @@ class TextLine(Protocol):
 
 @dataclass
 class Block:
-    kind: Literal["h1", "h2", "p"]
+    kind: Literal["h1", "h2", "p", "quote"]  # quote: đoạn trích (vd. lá thư trong truyện)
     text: str  # chỗ có chú thích được đánh dấu bằng note_ref(n)
 
 
