@@ -115,15 +115,16 @@ def running_headers(pages: Sequence[Sequence[TextLine]]) -> frozenset[str]:
 
 
 def _part_of(key: str, header: str) -> bool:
-    """key là header, hoặc là header bị cắt mất đầu / đuôi (ảnh cắt sát mép)."""
-    return key == header or (
-        len(key) >= HEADER_MIN_PREFIX and (header.startswith(key) or header.endswith(key))
-    )
+    """key là header, hoặc là header bị cắt mất đuôi ("nhung canh") / mất đầu ("h conwell"). Mất đầu
+    thì phải còn ít nhất nửa dòng: đuôi ngắn như "kim cuong" dễ trùng chữ thường trong bài."""
+    if key == header or len(key) < HEADER_MIN_PREFIX:
+        return key == header
+    return header.startswith(key) or (header.endswith(key) and 2 * len(key) >= len(header))
 
 
-def _is_header(text: str, headers: frozenset[str]) -> bool:
+def _is_header(text: str, headers: frozenset[str], exact: bool = False) -> bool:
     key = _header_key(text)
-    return bool(key) and any(_part_of(key, h) for h in headers)
+    return bool(key) and any(key == h if exact else _part_of(key, h) for h in headers)
 
 
 def _running_flags(lines: Sequence[TextLine], headers: frozenset[str] = frozenset()) -> list[bool]:
@@ -139,7 +140,11 @@ def _running_flags(lines: Sequence[TextLine], headers: frozenset[str] = frozense
             flags.append(at_bottom or at_top)
         else:
             near_top = line.y1 < HEADER_LOOSE_BOTTOM and index == 0
-            known = (near_top or at_bottom) and _is_header(text, headers)  # vd. tên tác giả ở chân trang đầu
+            # ở chân trang chỉ nhận dòng y hệt (vd. tên tác giả ở chân trang mở đầu): dòng cuối trang
+            # như "kim cương." trùng đuôi tên sách mà không phải dòng đầu trang
+            known = (near_top and _is_header(text, headers)) or (
+                at_bottom and _is_header(text, headers, True)
+            )
             flags.append((at_bottom and _is_upper(text)) or known)
     return flags
 

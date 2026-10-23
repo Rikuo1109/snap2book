@@ -206,3 +206,15 @@ def test_known_header_cut_at_start_lower_or_at_bottom(page):
     pages.append(page(*rows(5, "Lời nói đầu")[1:], (author, "center", 0.977)))  # tên tác giả ở chân trang
     text = " ".join(b.text for b in build_book(pages).blocks)
     assert "Conwell" not in text
+
+
+def test_last_line_matching_header_tail_is_kept(page):
+    title = "Những cánh đồng kim cương"
+    pages = []
+    for k in range(4):
+        body = [(f"trang {k} dòng {i} nói về quả cầu lửa nguội", "body", 0.06 + 0.035 * i) for i in range(25)]
+        pages.append(page((title, "center", 0.003), *body))
+    pages[1].append(
+        type(pages[1][0])("kim cương.", 0.01, 0.973, 0.24, 0.999)
+    )  # dòng cuối đoạn sát chân trang
+    assert "kim cương." in " ".join(b.text for b in build_book(pages).blocks)
