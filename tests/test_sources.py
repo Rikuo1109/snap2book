@@ -80,3 +80,8 @@ def test_save_cover_images(tmp_path):
     assert [p.name for p in saved] == ["cover-1.jpg", "cover-2.jpg"]
     out = cv2.imread(str(saved[0]))
     assert max(out.shape[:2]) <= 1600 and out[150, 100, 2] > 150 and out[150, 100, 0] < 60  # giữ màu
+
+
+def test_book_name_trailing_space_stripped(tmp_path):
+    touch(tmp_path / "Những cánh đồng kim cương " / "1.pdf")
+    assert [name for name, _ in find_jobs(tmp_path)] == ["Những cánh đồng kim cương"]

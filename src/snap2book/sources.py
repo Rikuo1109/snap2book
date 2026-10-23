@@ -138,4 +138,5 @@ def _natural_key(path: Path) -> list:
 
 
 def _nfc(name: str) -> str:
-    return unicodedata.normalize("NFC", name)
+    # bỏ cả khoảng trắng thừa ở hai đầu (tên thư mục gõ trên iPhone hay dính dấu cách cuối)
+    return unicodedata.normalize("NFC", name).strip()
