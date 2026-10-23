@@ -16,6 +16,8 @@ import numpy as np
 from snap2book.dewarp import dewarp
 
 INK_THRESHOLD = 150  # sau khi làm phẳng ánh sáng, điểm tối hơn mức này là mực
+FAINT_OTSU = 175  # ngưỡng Otsu của trang cao hơn mức này: ảnh mờ, chữ nhạt (nét chữ xám)
+MAX_INK_THRESHOLD = 195
 MAX_SKEW_DEG = 6.0
 HEADING_GAP = 0.25  # tiêu đề chương có thể cách đoạn đầu tới chừng này (theo chiều cao ảnh)
 
@@ -37,9 +39,17 @@ def flatten_illumination(gray: np.ndarray) -> np.ndarray:
     return cv2.divide(gray, bg, scale=255)
 
 
-def ink_mask(norm: np.ndarray) -> np.ndarray:
+def ink_threshold(norm: np.ndarray) -> int:
+    """Ngưỡng mực của trang. Thường là INK_THRESHOLD; ảnh chụp mờ (nét chữ xám nhạt, phần lớn sáng
+    hơn INK_THRESHOLD) thì theo ngưỡng Otsu của phần giữa trang, để không mất cả mảng chữ."""
+    h, w = norm.shape
+    otsu = cv2.threshold(norm[h // 5 : 4 * h // 5, w // 6 : 5 * w // 6], 0, 255, cv2.THRESH_OTSU)[0]
+    return int(min(otsu, MAX_INK_THRESHOLD)) if otsu > FAINT_OTSU else INK_THRESHOLD
+
+
+def ink_mask(norm: np.ndarray, threshold: int = INK_THRESHOLD) -> np.ndarray:
     """Mask chữ: điểm tối, bỏ vệt lớn (ngón tay, mép sách), vệt chạm mép ảnh và nhiễu."""
-    mask = (norm < INK_THRESHOLD).astype(np.uint8)
+    mask = (norm < threshold).astype(np.uint8)
     n, labels, stats, _ = cv2.connectedComponentsWithStats(mask, 8)
     h, w = mask.shape
     max_h = h * 0.06  # chữ cao không quá ~6% ảnh (kể cả tiêu đề chương)
@@ -154,9 +164,10 @@ def clean_page(gray: np.ndarray, debug_path: Path | None = None, flatten: bool =
     """Làm sạch một ảnh chụp. debug_path: lưu ảnh đánh dấu mực (đỏ) và vùng cắt (xanh).
     flatten: làm phẳng trang cong."""
     norm = flatten_illumination(gray)
-    angle = find_skew(ink_mask(norm))
+    threshold = ink_threshold(norm)
+    angle = find_skew(ink_mask(norm, threshold))
     norm = rotate(norm, angle, 255)
-    mask = ink_mask(norm)
+    mask = ink_mask(norm, threshold)
     region, (x0, y0, x1, y1) = main_page_region(mask)
     p = int(0.006 * norm.shape[1])  # chừa vài px để không sát mép chữ
     h, w = norm.shape
