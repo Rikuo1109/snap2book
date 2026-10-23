@@ -113,7 +113,13 @@ def main_page_region(mask: np.ndarray) -> tuple[np.ndarray, tuple[int, int, int,
     ink = np.bincount(labels.ravel(), weights=mask.ravel(), minlength=n)
     ink[0] = 0
     big = [i for i in range(1, n) if ink[i] >= 0.4 * ink.max()]
-    main = min(big, key=lambda i: abs(stats[i][0] + stats[i][2] / 2 - w / 2))
+    # khối lớn trùm qua giữa ảnh: lấy khối nhiều mực nhất (một đoạn bị khe trắng dọc chẻ đôi thì
+    # nửa hẹp hơn có thể gần giữa hơn, nhưng chọn nó làm cột thì loại oan các đoạn rộng khác)
+    centered = [i for i in big if stats[i][0] <= w / 2 <= stats[i][0] + stats[i][2]]
+    if centered:
+        main = max(centered, key=lambda i: ink[i])
+    else:
+        main = min(big, key=lambda i: abs(stats[i][0] + stats[i][2] / 2 - w / 2))
     x0, y0, bw, bh, _ = stats[main]
     x1, y1 = x0 + bw, y0 + bh
     mx0, mx1 = x0, x1
@@ -139,7 +145,14 @@ def main_page_region(mask: np.ndarray) -> tuple[np.ndarray, tuple[int, int, int,
             # vệt dọc (bóng gáy sách, mép trang, đuôi dòng trang bên cạnh bị mép ảnh cắt): chữ luôn
             # nằm ngang. Riêng ở chỗ tiêu đề, một chữ in đậm hẹp ("2", "i") sau khi nới theo chiều
             # dọc cũng cao ~2.5 lần rộng, nên ở đó cho tới 3 lần
-            if ch > (3 if heading else 2) * cw:
+            # ...trừ mẩu đầu/đuôi dòng bị một khe trắng dọc (lóa sáng, nếp giấy) tách khỏi khối chữ
+            # bên cạnh: cùng hàng với một khối đã chọn và sát ngay nó
+            beside = any(
+                min(y + ch, stats[j][1] + stats[j][3]) - max(y, stats[j][1]) > 0.8 * ch
+                and max(stats[j][0] - (x + cw), x - (stats[j][0] + stats[j][2])) < w * 0.03
+                for j in selected
+            )
+            if ch > (3 if heading else 2) * cw and not beside:
                 continue
             if in_column and (gap < max_gap or heading):
                 selected.add(i)
