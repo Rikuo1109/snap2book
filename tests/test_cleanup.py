@@ -46,3 +46,14 @@ def test_paragraph_split_by_vertical_gap_keeps_whole_page():
     lines_mask(mask, 1000, 1330, 1550, 2200)
     _, (x0, y0, x1, y1) = main_page_region(mask)
     assert x0 <= 255 and x1 >= 1325 and y0 <= 255 and y1 >= 2190
+
+
+def test_letters_touching_image_edge_are_kept():
+    # app scan cắt ảnh sát chữ: chữ cái đầu dòng chạm mép trái ảnh vẫn là mực
+    mask_img = np.full((1600, 1000), 250, np.uint8)
+    for row in range(20):
+        cv2.putText(
+            mask_img, "ngay lan kinh doanh", (2, 100 + row * 60), cv2.FONT_HERSHEY_SIMPLEX, 1.2, 20, 3
+        )
+    mask = ink_mask(flatten_illumination(mask_img))
+    assert mask[:, :12].sum() > 0  # nét chữ ngay sát mép trái không bị bỏ

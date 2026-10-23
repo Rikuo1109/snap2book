@@ -66,7 +66,10 @@ def ink_mask(norm: np.ndarray, threshold: int = INK_THRESHOLD) -> np.ndarray:
             continue
         if stroke[i] > 0.3 * bh and bh > h * 0.012:  # hình đặc (không phải dấu chấm): khăn bàn
             continue
-        if x < edge or y < edge or x + bw > w - edge or y + bh > h - edge:  # khăn bàn, trang bị cắt
+        # chạm mép ảnh: khăn bàn, trang bị cắt... Nhưng app scan hay cắt ảnh sát chữ, chữ cái đầu
+        # dòng chạm mép: vệt cỡ một chữ thì giữ (mẩu trang bên cạnh bị loại ở main_page_region)
+        glyph = bh <= h * 0.025 and bw <= w * 0.06
+        if (x < edge or y < edge or x + bw > w - edge or y + bh > h - edge) and not glyph:
             continue
         keep[i] = True
     return keep[labels].astype(np.uint8)
