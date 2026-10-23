@@ -16,6 +16,8 @@ import numpy as np
 from snap2book.dewarp import dewarp
 
 INK_THRESHOLD = 150  # sau khi làm phẳng ánh sáng, điểm tối hơn mức này là mực
+FAINT_OTSU = 175  # ngưỡng Otsu của trang cao hơn mức này: ảnh mờ, chữ nhạt (nét chữ xám)
+MAX_INK_THRESHOLD = 195
 MAX_SKEW_DEG = 6.0
 HEADING_GAP = 0.25  # tiêu đề chương có thể cách đoạn đầu tới chừng này (theo chiều cao ảnh)
 
@@ -37,9 +39,17 @@ def flatten_illumination(gray: np.ndarray) -> np.ndarray:
     return cv2.divide(gray, bg, scale=255)
 
 
-def ink_mask(norm: np.ndarray) -> np.ndarray:
+def ink_threshold(norm: np.ndarray) -> int:
+    """Ngưỡng mực của trang. Thường là INK_THRESHOLD; ảnh chụp mờ (nét chữ xám nhạt, phần lớn sáng
+    hơn INK_THRESHOLD) thì theo ngưỡng Otsu của phần giữa trang, để không mất cả mảng chữ."""
+    h, w = norm.shape
+    otsu = cv2.threshold(norm[h // 5 : 4 * h // 5, w // 6 : 5 * w // 6], 0, 255, cv2.THRESH_OTSU)[0]
+    return int(min(otsu, MAX_INK_THRESHOLD)) if otsu > FAINT_OTSU else INK_THRESHOLD
+
+
+def ink_mask(norm: np.ndarray, threshold: int = INK_THRESHOLD) -> np.ndarray:
     """Mask chữ: điểm tối, bỏ vệt lớn (ngón tay, mép sách), vệt chạm mép ảnh và nhiễu."""
-    mask = (norm < INK_THRESHOLD).astype(np.uint8)
+    mask = (norm < threshold).astype(np.uint8)
     n, labels, stats, _ = cv2.connectedComponentsWithStats(mask, 8)
     h, w = mask.shape
     max_h = h * 0.06  # chữ cao không quá ~6% ảnh (kể cả tiêu đề chương)
@@ -56,7 +66,10 @@ def ink_mask(norm: np.ndarray) -> np.ndarray:
             continue
         if stroke[i] > 0.3 * bh and bh > h * 0.012:  # hình đặc (không phải dấu chấm): khăn bàn
             continue
-        if x < edge or y < edge or x + bw > w - edge or y + bh > h - edge:  # khăn bàn, trang bị cắt
+        # chạm mép ảnh: khăn bàn, trang bị cắt... Nhưng app scan hay cắt ảnh sát chữ, chữ cái đầu
+        # dòng chạm mép: vệt cỡ một chữ thì giữ (mẩu trang bên cạnh bị loại ở main_page_region)
+        glyph = bh <= h * 0.025 and bw <= w * 0.06
+        if (x < edge or y < edge or x + bw > w - edge or y + bh > h - edge) and not glyph:
             continue
         keep[i] = True
     return keep[labels].astype(np.uint8)
@@ -103,7 +116,13 @@ def main_page_region(mask: np.ndarray) -> tuple[np.ndarray, tuple[int, int, int,
     ink = np.bincount(labels.ravel(), weights=mask.ravel(), minlength=n)
     ink[0] = 0
     big = [i for i in range(1, n) if ink[i] >= 0.4 * ink.max()]
-    main = min(big, key=lambda i: abs(stats[i][0] + stats[i][2] / 2 - w / 2))
+    # khối lớn trùm qua giữa ảnh: lấy khối nhiều mực nhất (một đoạn bị khe trắng dọc chẻ đôi thì
+    # nửa hẹp hơn có thể gần giữa hơn, nhưng chọn nó làm cột thì loại oan các đoạn rộng khác)
+    centered = [i for i in big if stats[i][0] <= w / 2 <= stats[i][0] + stats[i][2]]
+    if centered:
+        main = max(centered, key=lambda i: ink[i])
+    else:
+        main = min(big, key=lambda i: abs(stats[i][0] + stats[i][2] / 2 - w / 2))
     x0, y0, bw, bh, _ = stats[main]
     x1, y1 = x0 + bw, y0 + bh
     mx0, mx1 = x0, x1
@@ -129,7 +148,14 @@ def main_page_region(mask: np.ndarray) -> tuple[np.ndarray, tuple[int, int, int,
             # vệt dọc (bóng gáy sách, mép trang, đuôi dòng trang bên cạnh bị mép ảnh cắt): chữ luôn
             # nằm ngang. Riêng ở chỗ tiêu đề, một chữ in đậm hẹp ("2", "i") sau khi nới theo chiều
             # dọc cũng cao ~2.5 lần rộng, nên ở đó cho tới 3 lần
-            if ch > (3 if heading else 2) * cw:
+            # ...trừ mẩu đầu/đuôi dòng bị một khe trắng dọc (lóa sáng, nếp giấy) tách khỏi khối chữ
+            # bên cạnh: cùng hàng với một khối đã chọn và sát ngay nó
+            beside = any(
+                min(y + ch, stats[j][1] + stats[j][3]) - max(y, stats[j][1]) > 0.8 * ch
+                and max(stats[j][0] - (x + cw), x - (stats[j][0] + stats[j][2])) < w * 0.03
+                for j in selected
+            )
+            if ch > (3 if heading else 2) * cw and not beside:
                 continue
             if in_column and (gap < max_gap or heading):
                 selected.add(i)
@@ -154,9 +180,10 @@ def clean_page(gray: np.ndarray, debug_path: Path | None = None, flatten: bool =
     """Làm sạch một ảnh chụp. debug_path: lưu ảnh đánh dấu mực (đỏ) và vùng cắt (xanh).
     flatten: làm phẳng trang cong."""
     norm = flatten_illumination(gray)
-    angle = find_skew(ink_mask(norm))
+    threshold = ink_threshold(norm)
+    angle = find_skew(ink_mask(norm, threshold))
     norm = rotate(norm, angle, 255)
-    mask = ink_mask(norm)
+    mask = ink_mask(norm, threshold)
     region, (x0, y0, x1, y1) = main_page_region(mask)
     p = int(0.006 * norm.shape[1])  # chừa vài px để không sát mép chữ
     h, w = norm.shape

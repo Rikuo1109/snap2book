@@ -169,3 +169,52 @@ def test_unreadable_or_wrong_chapter_numbers_follow_order():
     assert chapters("CHƯƠNG :", "CHƯƠNG 3") == ["Chương 2", "Chương 3", "Lời bạt"]  # suy ra từ chương sau
     assert chapters("CHƯƠNG 2", "CHƯƠNG 2", "CHƯƠNG") == ["Chương 2", "Chương 3", "Chương 4", "Lời bạt"]
     assert chapters("CHƯƠNG 1", "CHƯƠNG 5") == ["Chương 1", "Chương 5", "Lời bạt"]  # chụp bỏ qua vài chương
+
+
+def test_recurring_top_headers_removed(page):
+    # tên sách / tác giả in luân phiên ở mép trên; một trang bị cắt mất đuôi dòng đầu trang
+    title, author = "Những cánh đồng kim cương", "Russell H. Conwell"
+    heads = [title, author, "Những cánh", author, title, author]
+    pages = []
+    for k, head in enumerate(heads):
+        rows = [(head, "center", 0.003)]
+        rows += [(f"trang {k} dòng {i} của bài giảng dài", "body", 0.06 + 0.035 * i) for i in range(10)]
+        pages.append(page(*rows))
+    text = " ".join(b.text for b in build_book(pages).blocks)
+    assert "Conwell" not in text and "Những cánh" not in text
+    assert "dài trang 1 dòng 0" in text  # đoạn nối liền qua trang, không bị dòng đầu trang chen vào
+
+
+def test_chapter_heading_at_top_is_not_a_running_header(page):
+    pages = [
+        page((f"CHƯƠNG {k}", "center", 0.003), (f"Nội dung chương {k}.", "last", 0.1)) for k in (1, 2, 3)
+    ]
+    text = " ".join(b.text for b in build_book(pages).blocks)
+    assert all(f"hương {k}" in text for k in (1, 2, 3))  # không bị coi là dòng đầu trang mà bỏ đi
+
+
+def test_known_header_cut_at_start_lower_or_at_bottom(page):
+    author = "Russell H. Conwell"
+
+    def rows(k, head, y=0.003):
+        body = [(f"trang {k} dòng {i} của bài giảng dài", "body", 0.12 + 0.035 * i) for i in range(10)]
+        return [(head, "center", y), *body]
+
+    pages = [page(*rows(k, author)) for k in range(3)]
+    pages.append(page(*rows(3, "H. Conwell")))  # ảnh cắt mất đầu dòng
+    pages.append(page(*rows(4, author, 0.074)))  # ảnh chừa lề trên rộng
+    pages.append(page(*rows(5, "Lời nói đầu")[1:], (author, "center", 0.977)))  # tên tác giả ở chân trang
+    text = " ".join(b.text for b in build_book(pages).blocks)
+    assert "Conwell" not in text
+
+
+def test_last_line_matching_header_tail_is_kept(page):
+    title = "Những cánh đồng kim cương"
+    pages = []
+    for k in range(4):
+        body = [(f"trang {k} dòng {i} nói về quả cầu lửa nguội", "body", 0.06 + 0.035 * i) for i in range(25)]
+        pages.append(page((title, "center", 0.003), *body))
+    pages[1].append(
+        type(pages[1][0])("kim cương.", 0.01, 0.973, 0.24, 0.999)
+    )  # dòng cuối đoạn sát chân trang
+    assert "kim cương." in " ".join(b.text for b in build_book(pages).blocks)
