@@ -10,6 +10,7 @@ Không phụ thuộc OCR engine: chỉ cần các dòng có toạ độ chuẩn 
 
 import re
 import unicodedata
+from collections import Counter
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Literal, Protocol
@@ -56,6 +57,11 @@ FOOTER_TOP = 0.92  # dòng nằm dưới mức này (theo chiều cao trang) lu�
 FOOTER_MIN_TOP = 0.8  # hàng cuối trang tách xa phần trên (FOOTER_GAP) và thấp hơn mức này: chân trang
 FOOTER_GAP = 1.6  # khoảng cách tới hàng trên, tính theo khoảng cách dòng thường của trang
 HEADER_BOTTOM = 0.06
+HEADER_MIN_PAGES = 3  # dòng đầu trang lặp lại trên chừng này trang trở lên: tên sách / tác giả in đầu trang
+HEADER_MIN_PREFIX = (
+    8  # dòng đầu trang bị cắt mất đầu/đuôi ("Những cánh") vẫn nhận ra nếu dài ít nhất chừng này
+)
+HEADER_LOOSE_BOTTOM = 0.12  # dòng đầu trang đã biết (lặp lại) thì nhận cả khi ảnh cắt chừa lề trên rộng hơn
 
 # số mũ chú thích thường bị OCR đọc thành dấu nháy: "Sotori'"
 _NOTE_MARK = re.compile(r"(?<=\w)['’ʼ`¹](?=[\s,.;:!?]|$)")
@@ -89,8 +95,40 @@ def _footer_top(lines: Sequence[TextLine]) -> float:
     return FOOTER_TOP
 
 
-def _running_flags(lines: Sequence[TextLine]) -> list[bool]:
-    """Header/footer: dòng ở mép trên/dưới chỉ là số, hoặc viết hoa (tên sách, tác giả)."""
+def _header_key(text: str) -> str:
+    """Chữ của dòng đầu trang để so giữa các trang: bỏ dấu, chữ thường, bỏ số trang ở hai đầu."""
+    return re.sub(r"^[\d\s\W]+|[\d\s\W]+$", "", re.sub(r"\s+", " ", _unaccent(text)))
+
+
+def _top_line(lines: Sequence[TextLine]) -> TextLine | None:
+    return lines[0] if lines and lines[0].y1 < HEADER_BOTTOM else None
+
+
+def running_headers(pages: Sequence[Sequence[TextLine]]) -> frozenset[str]:
+    """Dòng đầu trang (tên sách, tên tác giả...) in lặp lại ở mép trên nhiều trang. Tiêu đề chương
+    không tính, kể cả khi sát mép trên."""
+    keys = [_header_key(top.text) for lines in pages if (top := _top_line(lines))]
+    counts = Counter(k for k in keys if k and not _CHAPTER.match(k))
+    # dòng bị cắt mất đầu/đuôi ("nhung canh") cũng tính cho dòng đầy đủ ("nhung canh dong kim cuong")
+    total = {k: sum(n for j, n in counts.items() if _part_of(j, k)) for k in counts}
+    return frozenset(k for k, n in total.items() if n >= HEADER_MIN_PAGES)
+
+
+def _part_of(key: str, header: str) -> bool:
+    """key là header, hoặc là header bị cắt mất đầu / đuôi (ảnh cắt sát mép)."""
+    return key == header or (
+        len(key) >= HEADER_MIN_PREFIX and (header.startswith(key) or header.endswith(key))
+    )
+
+
+def _is_header(text: str, headers: frozenset[str]) -> bool:
+    key = _header_key(text)
+    return bool(key) and any(_part_of(key, h) for h in headers)
+
+
+def _running_flags(lines: Sequence[TextLine], headers: frozenset[str] = frozenset()) -> list[bool]:
+    """Header/footer: dòng ở mép trên/dưới chỉ là số, hoặc viết hoa (tên sách, tác giả), hoặc là
+    dòng đầu trang lặp lại trên nhiều trang (headers, xem running_headers)."""
     footer_top = _footer_top(lines) if lines else FOOTER_TOP
     flags = []
     for index, line in enumerate(lines):
@@ -100,18 +138,21 @@ def _running_flags(lines: Sequence[TextLine]) -> list[bool]:
         if re.fullmatch(r"[\d\s]+", text):
             flags.append(at_bottom or at_top)
         else:
-            flags.append(at_bottom and _is_upper(text))
+            near_top = line.y1 < HEADER_LOOSE_BOTTOM and index == 0
+            known = (near_top or at_bottom) and _is_header(text, headers)  # vd. tên tác giả ở chân trang đầu
+            flags.append((at_bottom and _is_upper(text)) or known)
     return flags
 
 
 _EDGE_NUMBER = re.compile(r"^\W*(\d{1,4})\b|\b(\d{1,4})\W*$")
 
 
-def page_number(lines: Sequence[TextLine]) -> int | None:
+def page_number(lines: Sequence[TextLine], headers: frozenset[str] = frozenset()) -> int | None:
     """Số trang in trên trang (lấy từ header/footer), None nếu không đọc được.
     Ưu tiên dòng chỉ có số; sau đó số ở đầu/cuối dòng header/footer ("SAKAGUCHI ANGO 7",
     "10 VỤ ÁN SÁT NHÂN...")."""
-    running = [line.text.strip() for line, run in zip(lines, _running_flags(lines), strict=True) if run]
+    flags = _running_flags(lines, headers)
+    running = [line.text.strip() for line, run in zip(lines, flags, strict=True) if run]
     for text in running:
         if re.fullmatch(r"\d{1,4}", digits := text.replace(" ", "")):
             return int(digits)
@@ -184,6 +225,7 @@ class _Builder:
     def __init__(self) -> None:
         self.book = Book()
         self.para: str | None = None  # đoạn đang dở (có thể kéo sang trang sau)
+        self.headers: frozenset[str] = frozenset()  # dòng đầu trang lặp lại (running_headers)
 
     def end_paragraph(self) -> None:
         if self.para:
@@ -199,10 +241,10 @@ class _Builder:
             self.para += " " + text
 
     def add_page(self, lines: Sequence[TextLine]) -> None:
-        self.book.page_numbers.append(page_number(lines))
+        self.book.page_numbers.append(page_number(lines, self.headers))
         body = [
             line
-            for line, running in zip(lines, _running_flags(lines), strict=True)
+            for line, running in zip(lines, _running_flags(lines, self.headers), strict=True)
             if not running and not _is_noise(line.text.strip())
         ]
         if not body:
@@ -268,6 +310,7 @@ class _Builder:
 def build_book(pages: Sequence[Sequence[TextLine]]) -> Book:
     """Dựng nội dung từ các trang (mỗi trang là các dòng OCR sắp từ trên xuống)."""
     builder = _Builder()
+    builder.headers = running_headers(pages)
     for lines in pages:
         builder.add_page(lines)
     builder.end_paragraph()

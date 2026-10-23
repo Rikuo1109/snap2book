@@ -113,10 +113,11 @@ def convert(
     # import muộn: OCR cần macOS (Apple Vision), chế độ chỉ-ảnh thì không cần
     from snap2book.markdown import save_markdown, to_markdown
     from snap2book.pagecheck import check_pages
-    from snap2book.structure import build_book, page_number
+    from snap2book.structure import build_book, page_number, running_headers
     from snap2book.typeset import to_pdf
 
-    check = check_pages([page_number(page) for page in lines], [len(page) for page in lines])
+    headers = running_headers(lines)
+    check = check_pages([page_number(page, headers) for page in lines], [len(page) for page in lines])
     for msg in check.warnings:
         log.warning("  cảnh báo: %s", msg)
     photos = list(range(1, len(lines) + 1))  # số thứ tự ảnh của từng trang còn giữ, để ghi log
